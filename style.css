@@ -124,17 +124,47 @@ body::before {
   background: #0a0a0f;
 }
 
-/* 自機マーカー(点脈) */
+/* ==========================================
+   自機マーカー：GPSレーダーパルス仕様
+   ========================================== */
 .cyber-marker {
-  background: #fff;
+  background: #ffffff;
   border: 2px solid var(--accent-magenta);
   border-radius: 50%;
-  box-shadow: 0 0 12px var(--accent-magenta), 0 0 20px #fff;
-  animation: pulse-marker 0.8s infinite alternate;
+  box-shadow: 0 0 10px var(--accent-magenta);
+  position: relative; /* 周囲に広がる波紋の基準点にするため必須 */
 }
-@keyframes pulse-marker {
-  0% { transform: scale(0.8); }
-  100% { transform: scale(1.2); }
+
+/* 中心から外側へ無限に広がりながら消えるGPS波紋（ピコピコ） */
+.cyber-marker::after {
+  content: "";
+  position: absolute;
+  top: -2px; /* 本体のボーダー分を補正してジャスト中央に配置 */
+  left: -2px;
+  width: 12px; /* 本体のsize[12, 12]と合わせる */
+  height: 12px;
+  border: 2px solid var(--accent-magenta);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-magenta);
+  
+  /* アニメーションの指定（1.2秒周期で滑らかにループ） */
+  animation: gps-pulse-wave 1.2s infinite ease-out;
+  pointer-events: none;
+}
+
+/* 波紋が等速で拡大しながら、外側でフッと消えるアニメーション */
+@keyframes gps-pulse-wave {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(3.5); /* 本体の3.5倍の大きさまでパルスが広がる */
+    opacity: 0;           /* 完全に透過して消滅 */
+  }
 }
 
 .map-overlay-stats {

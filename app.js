@@ -19,7 +19,6 @@ const statusSub = document.getElementById('status-sub');
 const SHIBUYA_STATION = [35.6580, 139.7016];
 const SHINJUKU_STATION = [35.6909, 139.7003];
 
-// 起動時にOSRM APIから実際の道路経路を自動ダウンロード
 async function initApp() {
   pushLog("> TRACK_SYSTEM: CONNECTING TO OSRM NETWORK...");
   const result = await mapService.fetchOSRMRoute(SHIBUYA_STATION, SHINJUKU_STATION);
@@ -42,7 +41,11 @@ timerWorker.onmessage = function(e) {
     timeLeft = duration - elapsed;
 
     const progress = Math.min(elapsed / duration, 1.0);
-    mapService.updatePosition(progress); // OSRMで取得した本物の道の上を移動！
+    
+    // 【修正】マップの更新と同時に、GPS通過通知を受け取って右側にログを吐く
+    mapService.updatePosition(progress, (checkpointName) => {
+      pushLog(`>> TACTICAL_GPS: PASSED [${checkpointName}]`, "system");
+    });
 
     if (timeLeft <= 0) {
       timerWorker.postMessage('STOP');
@@ -59,7 +62,6 @@ timerWorker.onmessage = function(e) {
   }
 };
 
-// UI制御ロジック
 function updateDisplay(ms) {
   if (ms < 0) ms = 0;
   const totalSec = Math.ceil(ms / 1000);
@@ -94,10 +96,10 @@ function updateStatusUI() {
   document.getElementById('user-level').innerText = `RANK: OPERATOR [LV.${userState.level}]`;
   let nextLevelXP = userState.level * 100;
   document.getElementById('xp-text').innerText = `${userState.xp} / ${nextLevelXP} XP`;
+  document.getElementById('user-state' /* Note: keeping original ID binding but targeting internal value */);
   document.getElementById('xp-fill').style.width = `${(userState.xp / nextLevelXP) * 100}%`;
 }
 
-// イベントリスナー
 startBtn.addEventListener('click', () => {
   if (!isRunning) {
     isRunning = true;
@@ -126,5 +128,4 @@ resetBtn.addEventListener('click', () => {
   pushLog(">> ALERT: USER FORCED PROCESS ABORTION.", "system");
 });
 
-// アプリの起動
 initApp();
