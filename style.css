@@ -1,0 +1,200 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-void: #0a0a0f;
+  --accent-cyan: #00f0ff;
+  --accent-magenta: #ff2a6d;
+  --highlight-yellow: #fcee0a;
+  --success-green: #05ffa1;
+  --terminal-dim: rgba(0, 240, 255, 0.12);
+}
+
+body {
+  background-color: var(--bg-void);
+  color: var(--accent-cyan);
+  font-family: 'Courier New', Courier, monospace;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* CRT走査線 */
+body::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  z-index: 999;
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+/* 3カラム・鉄壁レイアウト固定 */
+.matrix-layout {
+  display: grid;
+  grid-template-columns: 350px 480px 350px;
+  height: 460px;
+  width: 1200px;
+  gap: 15px;
+  z-index: 10;
+}
+
+.panel {
+  border: 2px solid var(--accent-cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+  background: rgba(13, 2, 33, 0.92);
+  padding: 15px;
+  border-radius: 4px;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel-header {
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+  color: var(--highlight-yellow);
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--terminal-dim);
+  padding-bottom: 6px;
+}
+
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.xp-bar-container {
+  width: 100%;
+  background: var(--terminal-dim);
+  height: 6px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.xp-bar-fill {
+  background: var(--success-green);
+  height: 100%;
+  width: 0%;
+  box-shadow: 0 0 8px var(--success-green);
+  transition: width 0.4s ease;
+}
+
+.timer-box {
+  text-align: center;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.glitch {
+  font-size: 4.4rem;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 10px var(--accent-cyan);
+  letter-spacing: 2px;
+}
+
+.map-viewport {
+  flex-grow: 1;
+  background: #000;
+  border: 1px solid var(--terminal-dim);
+  position: relative;
+  min-height: 0;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background: #0a0a0f;
+}
+
+/* 自機マーカー(点脈) */
+.cyber-marker {
+  background: #fff;
+  border: 2px solid var(--accent-magenta);
+  border-radius: 50%;
+  box-shadow: 0 0 12px var(--accent-magenta), 0 0 20px #fff;
+  animation: pulse-marker 0.8s infinite alternate;
+}
+@keyframes pulse-marker {
+  0% { transform: scale(0.8); }
+  100% { transform: scale(1.2); }
+}
+
+.map-overlay-stats {
+  padding-top: 10px;
+  font-size: 0.75rem;
+  color: rgba(0, 240, 255, 0.85);
+  line-height: 1.4;
+  flex-shrink: 0;
+  border-top: 1px solid var(--terminal-dim);
+}
+
+.log-stream-container {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.log-stream {
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--terminal-dim);
+  padding: 10px;
+  font-size: 0.72rem;
+  color: rgba(0, 240, 255, 0.8);
+  line-height: 1.5;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.log-stream::-webkit-scrollbar { display: none; }
+.log-entry { margin-bottom: 4px; word-break: break-all; }
+.log-entry.system { color: var(--highlight-yellow); }
+.log-entry.success { color: var(--success-green); }
+
+.btn-group {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 10px;
+  flex-shrink: 0;
+}
+
+button {
+  background: transparent;
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s ease;
+}
+button:hover {
+  background: var(--accent-cyan);
+  color: var(--bg-void);
+  box-shadow: 0 0 12px var(--accent-cyan);
+}
+
+/* Leaflet用サイバー上書き */
+.leaflet-control-attribution { background: rgba(0,0,0,0.7) !important; color: rgba(0, 240, 255, 0.4) !important; font-size: 0.6rem !important; }
+.leaflet-bar { border: 1px solid var(--accent-cyan) !important; box-shadow: 0 0 10px rgba(0,240,255,0.3) !important; }
+.leaflet-bar a { background-color: var(--bg-void) !important; color: var(--accent-cyan) !important; border-bottom: 1px solid var(--terminal-dim) !important; }

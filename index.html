@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CYBER_OS // MODULE_ROUTE_SYSTEM</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="matrix-layout">
+    
+    <div class="panel">
+      <div class="panel-header">// COGNITIVE_CLOCK</div>
+      <div class="status-bar">
+        <div id="user-level">RANK: OPERATOR [LV.1]</div>
+      </div>
+      <div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.7rem;">
+          <span>NEURAL_SYNC_XP</span>
+          <span id="xp-text">0 / 100 XP</span>
+        </div>
+        <div class="xp-bar-container">
+          <div class="xp-bar-fill" id="xp-fill"></div>
+        </div>
+      </div>
+
+      <div class="timer-box">
+        <div class="glitch" id="timer-display" data-text="25:00">25:00</div>
+        <div id="status-sub" style="color: var(--highlight-yellow); font-size: 0.75rem; margin-top: 8px;">[ SYSTEM: STANDBY ]</div>
+      </div>
+
+      <div class="btn-group">
+        <button id="start-btn">ENGAGE</button>
+        <button id="reset-btn">ABORT</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">// REALTIME_TACTICAL_MAP [OSRM_STREET_SNAP]</div>
+      <div class="map-viewport">
+        <div id="map"></div>
+      </div>
+      <div class="map-overlay-stats">
+        <div style="color: var(--highlight-yellow); font-weight: bold; margin-bottom: 2px;">ROUTE: 渋谷駅 ➔ 新宿駅 (道路網完全スナップ)</div>
+        <div style="display: flex; justify-content: space-between;">
+          <span id="map-pos">POS: LAT --.---- / LON --.----</span>
+          <span id="map-speed">SPD: 180 m/min</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; color: #fff; margin-top: 2px;">
+          <span>PROGRESS: <span id="map-pct">0.0</span>%</span>
+          <span>REMAINING: <span id="map-rem">-.--</span> km</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">// LOG_DATA_STREAM</div>
+      <div class="log-stream-container">
+        <div class="log-stream" id="log-stream"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="mapService.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
