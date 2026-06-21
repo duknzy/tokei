@@ -3,24 +3,24 @@ class MapService {
     // 地図の初期セットアップ
     this.map = L.map('map', { zoomControl: true }).setView([35.6580, 139.7016], 15);
     
-    // 漆黒のサイバーパンク専用マップスタイル
+    // 【復活】最高にシブい漆黒のサイバーパンク専用マップスタイル（CartoDB Dark Matter）
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap & CartoDB'
     }).addTo(this.map);
 
-    this.basePolyline = L.polyline([], { color: '#00f0ff', weight: 4, opacity: 0.3 }).addTo(this.map);
+    // 漆黒の闇に映えるネオンカラーライン
+    this.basePolyline = L.polyline([], { color: '#00f0ff', weight: 4, opacity: 0.35 }).addTo(this.map);
     this.traveledPolyline = L.polyline([], { color: '#ff2a6d', weight: 5, opacity: 0.95 }).addTo(this.map);
 
+    // 自機マーカー
     const cyberIcon = L.divIcon({ className: 'cyber-marker', iconSize: [12, 12], iconAnchor: [6, 6] });
     this.marker = L.marker([35.6580, 139.7016], { icon: cyberIcon }).addTo(this.map);
 
     this.routeCoords = [];
     this.totalDistance = 0;
 
-    // ==========================================
     // GPSリアルタイム検知用のチェックポイント定義
-    // ==========================================
     this.checkpoints = [
       { name: "宮下公園北セクター", lat: 35.6635, lon: 139.7024, passed: false },
       { name: "原宿・神宮前交差点ノード", lat: 35.6702, lon: 139.7028, passed: false },
@@ -30,6 +30,7 @@ class MapService {
     ];
   }
 
+  // OSRM APIから道路データを取得（吸い付き用）
   async fetchOSRMRoute(startLatLng, endLatLng) {
     const url = `https://router.project-osrm.org/route/v1/driving/${startLatLng[1]},${startLatLng[0]};${endLatLng[1]},${endLatLng[0]}?overview=full&geometries=geojson`;
     
@@ -52,7 +53,7 @@ class MapService {
     return { success: false, distance: 0 };
   }
 
-  // 第2引数に、app.js側のログ出力関数を呼び出すコールバックを追加
+  // 進行度に応じて、漆黒のグリッドマップ上を滑らかにトレース移動
   updatePosition(progress, onCheckpointPassed) {
     if (this.routeCoords.length === 0) return;
 
@@ -82,19 +83,17 @@ class MapService {
 
     this.map.panTo(currentLatLng, { animate: true, duration: 0.1 });
 
-    // ------------------------------------------
-    // GPS接近計算ロジック（未通過の地点への直線距離を算出）
-    // ------------------------------------------
+    // GPS接近計算
     this.checkpoints.forEach(cp => {
       if (!cp.passed) {
         const dLat = currentLatLng[0] - cp.lat;
         const dLon = currentLatLng[1] - cp.lon;
-        const distanceThreshold = 0.0006; // 実際の地図上で約50メートル前後の距離
+        const distanceThreshold = 0.0006;
         
         if (Math.sqrt(dLat * dLat + dLon * dLon) < distanceThreshold) {
-          cp.passed = true; // 通過フラグを立てる
+          cp.passed = true;
           if (onCheckpointPassed) {
-            onCheckpointPassed(cp.name); // app.jsに通知してログを流す
+            onCheckpointPassed(cp.name);
           }
         }
       }
@@ -107,7 +106,6 @@ class MapService {
 
   reset() {
     this.traveledPolyline.setLatLngs([]);
-    // チェックポイントの通過記録もリセット
     this.checkpoints.forEach(cp => cp.passed = false);
     if (this.routeCoords.length > 0) {
       this.marker.setLatLng(this.routeCoords[0]);
