@@ -1,36 +1,23 @@
 class MapService {
   constructor() {
-    // 地図の初期セットアップ
     this.map = L.map('map', { zoomControl: true }).setView([35.6580, 139.7016], 15);
     
-    // 【復活】最高にシブい漆黒のサイバーパンク専用マップスタイル（CartoDB Dark Matter）
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap & CartoDB'
     }).addTo(this.map);
 
-    // 漆黒の闇に映えるネオンカラーライン
     this.basePolyline = L.polyline([], { color: '#00f0ff', weight: 4, opacity: 0.35 }).addTo(this.map);
     this.traveledPolyline = L.polyline([], { color: '#ff2a6d', weight: 5, opacity: 0.95 }).addTo(this.map);
 
-    // 自機マーカー
     const cyberIcon = L.divIcon({ className: 'cyber-marker', iconSize: [12, 12], iconAnchor: [6, 6] });
     this.marker = L.marker([35.6580, 139.7016], { icon: cyberIcon }).addTo(this.map);
 
     this.routeCoords = [];
     this.totalDistance = 0;
-
-    // GPSリアルタイム検知用のチェックポイント定義
-    this.checkpoints = [
-      { name: "宮下公園北セクター", lat: 35.6635, lon: 139.7024, passed: false },
-      { name: "原宿・神宮前交差点ノード", lat: 35.6702, lon: 139.7028, passed: false },
-      { name: "北参道サイバーグリッド交差点", lat: 35.6765, lon: 139.7021, passed: false },
-      { name: "代々木駅東口ネットワーク境界", lat: 35.6845, lon: 139.7010, passed: false },
-      { name: "新宿四丁目大動脈交差点", lat: 35.6896, lon: 139.7005, passed: false }
-    ];
+    this.checkpoints = []; // 動的生成用に初期は空
   }
 
-  // OSRM APIから道路データを取得（吸い付き用）
   async fetchOSRMRoute(startLatLng, endLatLng) {
     const url = `https://router.project-osrm.org/route/v1/driving/${startLatLng[1]},${startLatLng[0]};${endLatLng[1]},${endLatLng[0]}?overview=full&geometries=geojson`;
     
@@ -45,6 +32,9 @@ class MapService {
         this.basePolyline.setLatLngs(this.routeCoords);
         this.map.fitBounds(this.basePolyline.getBounds());
         
+        // 【動的セクター生成】ルートの座標数から、等間隔に5箇所のチェックポイントを自動抽出
+        this.generateDynamicCheckpoints();
+        
         return { success: true, distance: this.totalDistance };
       }
     } catch (error) {
@@ -53,7 +43,23 @@ class MapService {
     return { success: false, distance: 0 };
   }
 
-  // 進行度に応じて、漆黒のグリッドマップ上を滑らかにトレース移動
+  generateDynamicCheckpoints() {
+    this.checkpoints = [];
+    if (this.routeCoords.length < 6) return;
+
+    const step = Math.floor(this.routeCoords.length / 5);
+    for (let i = 1; i <= 5; i++) {
+      const targetIdx = Math.min(i * step, this.routeCoords.length - 1);
+      const coord = this.routeCoords[targetIdx];
+      this.checkpoints.push({
+        name: `SECTOR_0${i}_NODE`,
+        lat: coord[0],
+        lon: coord[1],
+        passed: false
+      });
+    }
+  }
+
   updatePosition(progress, onCheckpointPassed) {
     if (this.routeCoords.length === 0) return;
 
@@ -88,7 +94,7 @@ class MapService {
       if (!cp.passed) {
         const dLat = currentLatLng[0] - cp.lat;
         const dLon = currentLatLng[1] - cp.lon;
-        const distanceThreshold = 0.0006;
+        const distanceThreshold = 0.0008; // 判定閾値
         
         if (Math.sqrt(dLat * dLat + dLon * dLon) < distanceThreshold) {
           cp.passed = true;
@@ -104,9 +110,13 @@ class MapService {
     document.getElementById('map-rem').innerText = (this.totalDistance * (1 - progress)).toFixed(2);
   }
 
+  resetCheckpoints() {
+    this.checkpoints.forEach(cp => cp.passed = false);
+  }
+
   reset() {
     this.traveledPolyline.setLatLngs([]);
-    this.checkpoints.forEach(cp => cp.passed = false);
+    this.resetCheckpoints();
     if (this.routeCoords.length > 0) {
       this.marker.setLatLng(this.routeCoords[0]);
       this.map.setView(this.routeCoords[0], 15);

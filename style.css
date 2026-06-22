@@ -1,31 +1,47 @@
+/* =======================================================
+   🏎️ CYBER_OS // GRAND_PRIX_TELEMETRY SYSTEM
+   [RETROWAVE // 8-BIT COCKPIT REVIVAL SPEC]
+   ======================================================= */
+
+/* 1. TYPOGRAPHY & FONT TECH */
+/* Loading the 8-bit pixel font: VT323 (Monospace, pixel perfect) */
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
 * {
   box-sizing: border-box;
 }
 
 :root {
-  --bg-void: #0a0a0f;
-  --accent-cyan: #00f0ff;
-  --accent-magenta: #ff2a6d;
-  --highlight-yellow: #fcee0a;
-  --success-green: #05ffa1;
-  --terminal-dim: rgba(0, 240, 255, 0.12);
+  /* Retrowave Palette - Main colors based on the reference image */
+  --bg-void: #06020f;         /* Purple-dark void (from reference image) */
+  --accent-neon-purple: #9400d3; /* Vibrant purple glow (from reference image) */
+  --accent-neon-pink: #ff2a6d;   /* Neon pink highlight (ers/tyre) */
+  --accent-neon-cyan: #00ffff;   /* Pure cyan pixel text (from reference image) */
+  --highlight-yellow: #fcee0a;   /* Cyber yellow */
+  --success-green: #05ffa1;     /* Success green */
+  --text-white: #ffffff;
+  
+  --terminal-dim: rgba(148, 0, 211, 0.2); /* Faint Purple */
+  --terminal-dim-text: rgba(0, 255, 255, 0.6); /* Dim Cyan */
 }
 
 body {
-  background-color: var(--bg-void);
-  color: var(--accent-cyan);
-  font-family: 'Courier New', Courier, monospace;
+  color: var(--accent-neon-cyan);
+  font-family: 'VT323', Courier, monospace; /* Set pixel font everywhere */
   margin: 0;
   padding: 0;
   height: 100vh;
   width: 100vw;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   overflow: hidden;
+  transition: background 0.4s ease;
+  background-color: var(--bg-void); /* Set new retrowave-dark background */
 }
 
-/* CRT走査線 */
+/* 📺 CRT SCANLINES */
 body::before {
   content: " ";
   display: block;
@@ -37,22 +53,56 @@ body::before {
   pointer-events: none;
 }
 
-/* 3カラム・鉄壁レイアウト固定 */
+/* 🏁 COCKPIT MULTI-BACKGROUND SKINS (Retro-fied) */
+body.void-black {
+  background-color: var(--bg-void);
+}
+body.cyber-grid {
+  background-color: var(--bg-void);
+  background-image: linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 35px 35px;
+}
+body.neon-pulse {
+  background: radial-gradient(circle at 15% 20%, rgba(148, 0, 211, 0.1) 0%, transparent 45%),
+              radial-gradient(circle at 85% 80%, rgba(0, 255, 255, 0.1) 0%, transparent 45%),
+              var(--bg-void);
+}
+
+/* 🎛️ TOP HUD BAR (Modified for the VT323 font) */
+.global-hud-top {
+  width: 96vw;
+  max-width: 1600px;
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(148, 0, 211, 0.05); /* Dim Purple background */
+  border: 1px solid var(--terminal-dim);
+  border-bottom: 2px solid var(--accent-neon-cyan);
+  font-size: 0.9rem; /* font VT323 needs slightly larger scale */
+  letter-spacing: 2px;
+  margin-bottom: 15px;
+}
+.hud-item { color: var(--terminal-dim-text); }
+
+/* 🏛️ 3-PANEL MATRIX LAYOUT (New cleaner cyan outline) */
 .matrix-layout {
   display: grid;
-  grid-template-columns: 350px 480px 350px;
-  height: 460px;
-  width: 1200px;
-  gap: 15px;
+  grid-template-columns: 380px 1fr 380px;
+  height: 82vh;
+  width: 96vw;
+  max-width: 1600px;
+  max-height: 850px;
+  gap: 20px;
   z-index: 10;
 }
 
 .panel {
-  border: 2px solid var(--accent-cyan);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
-  background: rgba(13, 2, 33, 0.92);
-  padding: 15px;
-  border-radius: 4px;
+  border: 2px solid var(--accent-neon-cyan); /* Bright cyan borders */
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.15);
+  background: rgba(6, 2, 15, 0.98); /* Purple void background (from reference) */
+  padding: 18px;
+  border-radius: 2px; /* Less rounded, more blocky */
   height: 100%;
   overflow: hidden;
   display: flex;
@@ -60,171 +110,284 @@ body::before {
   min-height: 0;
 }
 
+/* 🟢 TRANSPARENT PANEL SPEC (For user background visibility) */
+.transparent-panel {
+  background: rgba(6, 2, 15, 0.65) !important;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
 .panel-header {
-  font-size: 0.8rem;
-  margin-bottom: 12px;
+  font-size: 1rem;
+  margin-bottom: 15px;
   color: var(--highlight-yellow);
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--terminal-dim);
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 
-.status-bar {
+/* ⚙️ SETUP ROW ARCHITECTURE */
+.setup-zone {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--terminal-dim);
+}
+.setup-row { display: flex; align-items: center; gap: 10px; }
+.setup-label { font-size: 0.8rem; width: 85px; flex-shrink: 0; color: var(--terminal-dim-text); }
+
+.setup-zone select {
+  flex: 1;
+  background: #06020f;
+  color: var(--accent-neon-cyan);
+  border: 1px solid var(--accent-neon-cyan);
+  font-family: inherit;
   font-size: 0.8rem;
-  margin-bottom: 10px;
-  flex-shrink: 0;
+  padding: 4px 6px;
+  outline: none;
+  cursor: pointer;
 }
+.setup-zone input[type="number"], .setup-zone input[type="text"] {
+  background: #06020f;
+  color: var(--accent-neon-cyan);
+  border: 1px solid var(--accent-neon-cyan);
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 4px 6px;
+  outline: none;
+}
+.setup-zone input[type="number"] { width: 55px; text-align: center; }
 
-.xp-bar-container {
-  width: 100%;
-  background: var(--terminal-dim);
-  height: 6px;
-  margin-top: 4px;
-  flex-shrink: 0;
-}
+/* 🎖️ PROGRESS & STATUS STATS */
+.status-bar { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 12px; flex-shrink: 0; }
+.xp-bar-container { width: 100%; background: var(--terminal-dim); height: 8px; margin-top: 4px; flex-shrink: 0; }
+.xp-bar-fill { background: var(--success-green); height: 100%; width: 0%; box-shadow: 0 0 10px var(--success-green); transition: width 0.4s ease; }
 
-.xp-bar-fill {
-  background: var(--success-green);
-  height: 100%;
-  width: 0%;
-  box-shadow: 0 0 8px var(--success-green);
-  transition: width 0.4s ease;
-}
+/* ⏱️ COCKPIT CENTRAL CLOCK MODULE (VT323 Font) */
+.timer-box { text-align: center; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+#real-clock-display { color: var(--success-green); font-size: 2rem; font-weight: bold; letter-spacing: 3px; text-shadow: 0 0 12px var(--success-green); margin-bottom: 8px; border-bottom: 1px dashed rgba(5, 255, 161, 0.2); padding-bottom: 4px; }
+.glitch { font-size: 6rem; font-weight: bold; color: #fff; text-shadow: 0 0 20px var(--accent-neon-cyan); letter-spacing: 4px; }
+#total-remain-display { color: var(--highlight-yellow); font-size: 0.95rem; font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 8px var(--highlight-yellow); margin-top: 10px; padding: 6px; background: rgba(252, 238, 10, 0.04); border: 1px double rgba(252, 238, 10, 0.2); }
 
-.timer-box {
-  text-align: center;
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
+/* 🏎️ TRACK PROGRESS PROGRESSIVE LED BAR (Cyan-to-Magenta) */
+.rpm-meter-zone { margin-bottom: 15px; padding: 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--terminal-dim); }
+.rpm-bars { display: flex; gap: 3px; }
+.rpm-bar { height: 12px; flex: 1; background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.1); }
+.rpm-bar.active { background: var(--accent-neon-cyan); box-shadow: 0 0 8px var(--accent-cyan); }
+.rpm-bars .rpm-bar:nth-child(n+8).active { background: var(--accent-neon-pink); box-shadow: 0 0 8px var(--accent-neon-pink); } /* LED 8-10 are magenta */
 
-.glitch {
-  font-size: 4.4rem;
-  font-weight: bold;
-  color: #fff;
-  text-shadow: 0 0 10px var(--accent-cyan);
-  letter-spacing: 2px;
-}
+/* 🗺️ REALTIME TACTICAL MAP AREA (Modified map background) */
+.map-viewport { flex-grow: 1; background: #010103; border: 1px solid var(--terminal-dim); position: relative; min-height: 0; }
+#map { width: 100%; height: 100%; background: #06020f; } /* Dark purple map base */
 
-.map-viewport {
-  flex-grow: 1;
-  background: #000;
-  border: 1px solid var(--terminal-dim);
-  position: relative;
-  min-height: 0;
-}
+/* 🔴 LIVE GPS TELEMETRY MARKER WITH RADIAL PULSE (Cyan Marker, Magenta Pulse) */
+.cyber-marker { background: #ffffff; border: 2px solid var(--accent-neon-cyan); border-radius: 50%; box-shadow: 0 0 12px var(--accent-neon-cyan); }
+.cyber-marker::after { content: ""; position: absolute; top: -2px; left: -2px; width: 12px; height: 12px; border: 2px solid var(--accent-neon-cyan); border-radius: 50%; box-shadow: 0 0 8px var(--accent-neon-cyan); animation: gps-pulse-wave 1.2s infinite ease-out; pointer-events: none; }
+@keyframes gps-pulse-wave { 0% { transform: scale(1); opacity: 1; } 70% { opacity: 0.5; } 100% { transform: scale(3.5); opacity: 0; } }
 
-#map {
-  width: 100%;
-  height: 100%;
-  background: #0a0a0f;
-}
+.map-overlay-stats { padding-top: 12px; font-size: 0.9rem; color: rgba(0, 255, 255, 0.85); line-height: 1.5; flex-shrink: 0; border-top: 1px solid var(--terminal-dim); }
 
-/* ==========================================
-   自機マーカー：GPSレーダーパルス仕様
-   ========================================== */
-.cyber-marker {
-  background: #ffffff;
-  border: 2px solid var(--accent-magenta);
-  border-radius: 50%;
-  box-shadow: 0 0 10px var(--accent-magenta);
-  position: relative; /* 周囲に広がる波紋の基準点にするため必須 */
-}
-
-/* 中心から外側へ無限に広がりながら消えるGPS波紋（ピコピコ） */
-.cyber-marker::after {
-  content: "";
-  position: absolute;
-  top: -2px; /* 本体のボーダー分を補正してジャスト中央に配置 */
-  left: -2px;
-  width: 12px; /* 本体のsize[12, 12]と合わせる */
-  height: 12px;
-  border: 2px solid var(--accent-magenta);
-  border-radius: 50%;
-  box-shadow: 0 0 8px var(--accent-magenta);
-  
-  /* アニメーションの指定（1.2秒周期で滑らかにループ） */
-  animation: gps-pulse-wave 1.2s infinite ease-out;
-  pointer-events: none;
-}
-
-/* 波紋が等速で拡大しながら、外側でフッと消えるアニメーション */
-@keyframes gps-pulse-wave {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  70% {
-    opacity: 0.5;
-  }
-  100% {
-    transform: scale(3.5); /* 本体の3.5倍の大きさまでパルスが広がる */
-    opacity: 0;           /* 完全に透過して消滅 */
-  }
-}
-
-.map-overlay-stats {
-  padding-top: 10px;
-  font-size: 0.75rem;
-  color: rgba(0, 240, 255, 0.85);
-  line-height: 1.4;
-  flex-shrink: 0;
-  border-top: 1px solid var(--terminal-dim);
-}
-
-.log-stream-container {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.log-stream {
-  height: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid var(--terminal-dim);
-  padding: 10px;
-  font-size: 0.72rem;
-  color: rgba(0, 240, 255, 0.8);
-  line-height: 1.5;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
+/* 📊 LOG DATA STREAM WIREFRAME */
+.log-stream-container { flex-grow: 1; display: flex; flex-direction: column; min-height: 0; }
+.log-stream { height: 100%; background: rgba(0, 0, 0, 0.5); border: 1px solid var(--terminal-dim); padding: 12px; font-size: 0.85rem; color: rgba(0, 255, 255, 0.8); line-height: 1.6; overflow-y: auto; scrollbar-width: none; }
 .log-stream::-webkit-scrollbar { display: none; }
-.log-entry { margin-bottom: 4px; word-break: break-all; }
+.log-entry { margin-bottom: 6px; word-break: break-all; }
 .log-entry.system { color: var(--highlight-yellow); }
 .log-entry.success { color: var(--success-green); }
 
-.btn-group {
+/* 🔋 MINI TELEMETRY BARS (ERS & TYRE) */
+.mini-telemetry-zone { margin-top: 12px; padding: 10px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--terminal-dim); display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+
+/* 🎛️ CONTROL BUTTON GROUP */
+.btn-group { display: flex; gap: 12px; justify-content: center; margin-top: 12px; flex-shrink: 0; }
+button { background: transparent; border: 1px solid var(--accent-neon-cyan); color: var(--accent-neon-cyan); padding: 10px 24px; font-family: inherit; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; transition: all 0.15s ease; letter-spacing: 2px; }
+button:hover { background: var(--accent-neon-cyan); color: var(--bg-void); box-shadow: 0 0 15px var(--accent-neon-cyan); }
+
+/* =======================================================
+   🏆 [REBUILT] FIA OFFICIAL CERTIFICATE
+   [RETROWAVE ARCADE WINNER EDITION]
+   ======================================================= */
+.modal-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(6, 2, 15, 0.88); /* Dithering Purple Dark Void */
+  z-index: 9999;
   display: flex;
-  gap: 10px;
   justify-content: center;
-  margin-top: 10px;
-  flex-shrink: 0;
+  align-items: center;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+.certificate-frame {
+  /* Glowing Purple/Pink Double Outline from Gemini image */
+  border: 6px double var(--accent-neon-purple) !important;
+  box-shadow: 0 0 50px rgba(148, 0, 211, 0.4), inset 0 0 30px rgba(148, 0, 211, 0.2);
+  width: 900px; /* Enhanced size */
+  height: 640px;
+  
+  /* Background: Dithering purple/dark gradient from image */
+  background: radial-gradient(circle at 15% 20%, rgba(148, 0, 211, 0.4) 0%, transparent 45%),
+              linear-gradient(rgba(6, 2, 15, 0.70), rgba(6, 2, 15, 0.70)) !important;
+  
+  padding: 40px !important;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
 }
 
-button {
+/* ARCADE CERTIFICATE ELEMENTS */
+.cert-header {
+  font-size: 1.1rem;
+  color: var(--highlight-yellow);
+  letter-spacing: 5px;
+  border-bottom: 2px solid var(--accent-neon-purple);
+  padding-bottom: 8px;
+  width: 100%;
+}
+
+.cert-operator-label {
+  color: #fff;
+  font-size: 1rem;
+  letter-spacing: 3px;
+  margin-top: 25px;
+}
+
+/* 🟢 【NEW GLOW】Operator Hiro name (Glowing Cyan Monospace Pixel) */
+.cert-main {
+  font-size: 4rem !important;
+  color: var(--accent-neon-cyan) !important; /* Pure Cyan pixel text */
+  margin: 15px 0 !important;
+  font-weight: 700;
+  letter-spacing: 3px;
+  /* Glowing Purple/Magenta Drop Shadow from Gemini Image */
+  text-shadow: 0 0 25px var(--accent-neon-purple), 0 0 10px var(--accent-neon-magenta), 0 0 5px #fff;
+}
+
+.cert-reason {
+  font-size: 1.3rem;
+  color: #daffde; /* Keep dim green-ish */
+  margin-bottom: 25px;
+  letter-spacing: 1.5px;
+}
+
+.cert-track-name {
+  font-size: 2.2rem;
+  color: var(--highlight-yellow);
+  letter-spacing: 3px;
+  margin: 0 0 25px 0;
+  text-shadow: 0 0 15px rgba(252, 238, 10, 0.4);
+}
+
+/* 📊 [TILED GRID] Retro Tiled Stats Grid from image */
+.cert-arcade-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 30px;
+  width: 100%;
+  margin: 25px 0;
+  
+  background: rgba(6, 2, 15, 0.45); /* Dithering void background */
+  padding: 25px 40px;
+  
+  border: 1px solid var(--accent-neon-purple); /* Purple Grid borders */
+  border-radius: 4px;
+}
+
+/* Individual tiled result item from Gemini image */
+.cert-arcade-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+  font-size: 1.1rem;
+  
+  /* blocky borders from image */
+  border: 1px solid var(--terminal-dim); 
+  border-radius: 2px;
+  padding: 10px;
+  color: #daffde; /* Dim green label */
+}
+
+/* Statistics labels are cyan pixels */
+.cert-arcade-item .stats-label {
+  color: var(--accent-neon-cyan);
+  margin-right: 15px;
+}
+
+/* Earned Credits Tiled Block (Centered) */
+.cert-earned-block {
+  grid-column: span 2;
+  border: none;
+  justify-content: center;
+  gap: 15px;
+  font-size: 1.3rem;
+  margin-top: 5px;
+}
+
+#db-status-label {
+  font-size: 0.85rem;
+  color: var(--terminal-dim-text);
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+}
+
+/* Retro arcade-style close button */
+#modal-close-btn {
+  width: 50%;
+  border: 1px solid var(--highlight-yellow);
+  color: var(--highlight-yellow);
+  padding: 12px 24px;
   background: transparent;
-  border: 1px solid var(--accent-cyan);
-  color: var(--accent-cyan);
-  padding: 8px 16px;
-  font-family: inherit;
-  font-size: 0.8rem;
+  font-size: 1.1rem;
   cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 3px;
   text-transform: uppercase;
-  transition: all 0.15s ease;
 }
-button:hover {
-  background: var(--accent-cyan);
-  color: var(--bg-void);
-  box-shadow: 0 0 12px var(--accent-cyan);
+#modal-close-btn:hover {
+  background: var(--highlight-yellow);
+  color: #000;
+  box-shadow: 0 0 25px var(--highlight-yellow);
+  font-weight: bold;
+}
+/* =======================================================
+   📻 TEAM RADIO TEXT TELEMETRY EMISSION STYLE
+   ======================================================= */
+.log-entry.radio-gp {
+  color: var(--highlight-yellow); /* エンジニアからの無線はサイバーイエロー */
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(252, 238, 10, 0.3);
+}
+.log-entry.radio-telemetry {
+  color: var(--accent-neon-cyan); /* 吐き出されるデータは鮮烈なシアンピクセル */
+  padding-left: 10px;
+}
+/* =======================================================
+   🔓 CONTROL PANEL OVERFLOW FIX
+   ======================================================= */
+.scrollable-panel {
+  overflow-y: auto !important;
+  scrollbar-width: none; /* Firefox用のスクロールバー非表示 */
+}
+.scrollable-panel::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge用のスクロールバー非表示 */
 }
 
-/* Leaflet用サイバー上書き */
-.leaflet-control-attribution { background: rgba(0,0,0,0.7) !important; color: rgba(0, 240, 255, 0.4) !important; font-size: 0.6rem !important; }
-.leaflet-bar { border: 1px solid var(--accent-cyan) !important; box-shadow: 0 0 10px rgba(0,240,255,0.3) !important; }
-.leaflet-bar a { background-color: var(--bg-void) !important; color: var(--accent-cyan) !important; border-bottom: 1px solid var(--terminal-dim) !important; }
+
+
+/* 🗺️ Leaflet retrowave overrides */
+.leaflet-control-attribution { background: rgba(6, 2, 15, 0.7) !important; color: rgba(0, 255, 255, 0.4) !important; font-size: 0.75rem !important; }
+.leaflet-bar { border: 1px solid var(--accent-neon-cyan) !important; box-shadow: 0 0 10px rgba(0,255,255,0.3) !important; }
+.leaflet-bar a { background-color: #06020f !important; color: var(--accent-neon-cyan) !important; border-bottom: 1px solid var(--terminal-dim) !important; }
