@@ -1,125 +1,142 @@
 class MapService {
   constructor() {
-    this.map = L.map('map', { zoomControl: true }).setView([35.6580, 139.7016], 15);
-    
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap & CartoDB'
+    this.map = L.map('map', {
+      zoomControl: true,
+      attributionControl: true
+    }).setView([35.6580, 139.7016], 14);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+      maxZoom: 19
     }).addTo(this.map);
 
-    this.basePolyline = L.polyline([], { color: '#00f0ff', weight: 4, opacity: 0.35 }).addTo(this.map);
-    this.traveledPolyline = L.polyline([], { color: '#ff2a6d', weight: 5, opacity: 0.95 }).addTo(this.map);
-
-    const cyberIcon = L.divIcon({ className: 'cyber-marker', iconSize: [12, 12], iconAnchor: [6, 6] });
-    this.marker = L.marker([35.6580, 139.7016], { icon: cyberIcon }).addTo(this.map);
-
-    this.routeCoords = [];
-    this.totalDistance = 0;
-    this.checkpoints = []; // 動的生成用に初期は空
-  }
-
-  async fetchOSRMRoute(startLatLng, endLatLng) {
-    const url = `https://router.project-osrm.org/route/v1/driving/${startLatLng[1]},${startLatLng[0]};${endLatLng[1]},${endLatLng[0]}?overview=full&geometries=geojson`;
-    
-    try {
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      if (data.routes && data.routes.length > 0) {
-        this.routeCoords = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
-        this.totalDistance = data.routes[0].distance / 1000;
-        
-        this.basePolyline.setLatLngs(this.routeCoords);
-        this.map.fitBounds(this.basePolyline.getBounds());
-        
-        // 【動的セクター生成】ルートの座標数から、等間隔に5箇所のチェックポイントを自動抽出
-        this.generateDynamicCheckpoints();
-        
-        return { success: true, distance: this.totalDistance };
-      }
-    } catch (error) {
-      console.error("OSRM APIデータ取得失敗:", error);
-    }
-    return { success: false, distance: 0 };
-  }
-
-  generateDynamicCheckpoints() {
+    this.routeLine = null;
+    this.traveledLine = null; // 🟢 走行済みの軌跡（赤線）回路を再配備
+    this.routeCoordinates = [];
     this.checkpoints = [];
-    if (this.routeCoords.length < 6) return;
+    this.marker = null;
+    this.hasZoomedIn = false; // 走行開始時の自動クローズアップ制御用フラグ
+  }
 
-    const step = Math.floor(this.routeCoords.length / 5);
-    for (let i = 1; i <= 5; i++) {
-      const targetIdx = Math.min(i * step, this.routeCoords.length - 1);
-      const coord = this.routeCoords[targetIdx];
-      this.checkpoints.push({
-        name: `SECTOR_0${i}_NODE`,
-        lat: coord[0],
-        lon: coord[1],
-        passed: false
-      });
+  async fetchOSRMRoute(start, end) {
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!data.routes || data.routes.length === 0) return { success: false };
+
+      this.routeCoordinates = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+      const distanceKm = data.routes[0].distance / 1000;
+
+      // 旧レイヤーの残像を完全消去
+      if (this.routeLine) this.map.removeLayer(this.routeLine);
+      if (this.traveledLine) this.map.removeLayer(this.traveledLine);
+
+      // 未走行ルート（サイバーシアン）
+      this.routeLine = L.geoJSON({
+        type: "Feature",
+        geometry: data.routes[0].geometry
+      }, {
+        style: { color: "#00ffff", weight: 4, opacity: 0.5 }
+      }).addTo(this.map);
+
+      // 走行済みルート（ネオンピンク/レッド）の初期化
+      this.traveledLine = L.polyline([], {
+        color: "#ff2a6d",
+        weight: 6,
+        opacity: 0.9
+      }).addTo(this.map);
+
+      // スタンドバイ時はルート全体が綺麗に収まるように自動フィッティング
+      this.map.fitBounds(this.routeLine.getBounds(), { padding: [15, 15] });
+      this.generateCheckpoints(distanceKm);
+
+      if (this.marker) this.map.removeLayer(this.marker);
+      this.marker = L.marker(this.routeCoordinates[0], {
+        icon: L.divIcon({ className: 'cyber-marker', iconSize: [12, 12] })
+      }).addTo(this.map);
+
+      this.hasZoomedIn = false; // ルート生成時にフラグを初期化
+      return { success: true, distance: distanceKm };
+    } catch (e) {
+      console.error(e);
+      return { success: false };
     }
   }
 
-  updatePosition(progress, onCheckpointPassed) {
-    if (this.routeCoords.length === 0) return;
-
-    const totalSegments = this.routeCoords.length - 1;
-    const currentFloat = progress * totalSegments;
-    const idx = Math.floor(currentFloat);
-    const part = currentFloat - idx;
-
-    let currentLatLng;
-
-    if (idx >= totalSegments) {
-      currentLatLng = this.routeCoords[this.routeCoords.length - 1];
-    } else {
-      const p1 = this.routeCoords[idx];
-      const p2 = this.routeCoords[idx + 1];
-      currentLatLng = [
-        p1[0] + (p2[0] - p1[0]) * part,
-        p1[1] + (p2[1] - p1[1]) * part
-      ];
-    }
-
-    this.marker.setLatLng(currentLatLng);
-
-    const traveledPoints = this.routeCoords.slice(0, idx + 1);
-    traveledPoints.push(currentLatLng);
-    this.traveledPolyline.setLatLngs(traveledPoints);
-
-    this.map.panTo(currentLatLng, { animate: true, duration: 0.1 });
-
-    // GPS接近計算
-    this.checkpoints.forEach(cp => {
-      if (!cp.passed) {
-        const dLat = currentLatLng[0] - cp.lat;
-        const dLon = currentLatLng[1] - cp.lon;
-        const distanceThreshold = 0.0008; // 判定閾値
-        
-        if (Math.sqrt(dLat * dLat + dLon * dLon) < distanceThreshold) {
-          cp.passed = true;
-          if (onCheckpointPassed) {
-            onCheckpointPassed(cp.name);
-          }
-        }
+  generateCheckpoints(totalDistance) {
+    this.checkpoints = [];
+    const count = 3;
+    const step = Math.floor(this.routeCoordinates.length / (count + 1));
+    for (let i = 1; i <= count; i++) {
+      const idx = step * i;
+      if (this.routeCoordinates[idx]) {
+        this.checkpoints.push({
+          index: idx,
+          name: `SECTOR_CHIP_${i}`,
+          passed: false
+        });
       }
-    });
-
-    document.getElementById('map-pos').innerText = `POS: LAT ${currentLatLng[0].toFixed(4)} / LON ${currentLatLng[1].toFixed(4)}`;
-    document.getElementById('map-pct').innerText = (progress * 100).toFixed(1);
-    document.getElementById('map-rem').innerText = (this.totalDistance * (1 - progress)).toFixed(2);
+    }
   }
 
   resetCheckpoints() {
-    this.checkpoints.forEach(cp => cp.passed = false);
+    this.checkpoints.forEach(c => c.passed = false);
   }
 
   reset() {
-    this.traveledPolyline.setLatLngs([]);
     this.resetCheckpoints();
-    if (this.routeCoords.length > 0) {
-      this.marker.setLatLng(this.routeCoords[0]);
-      this.map.setView(this.routeCoords[0], 15);
+    if (this.traveledLine) this.traveledLine.setLatLngs([]);
+    if (this.routeCoordinates.length > 0 && this.marker) {
+      this.marker.setLatLng(this.routeCoordinates[0]);
+      this.map.setView(this.routeCoordinates[0], 14);
     }
+    this.hasZoomedIn = false;
+  }
+
+  updatePosition(progress, onCheckpointPassed) {
+    if (this.routeCoordinates.length === 0 || !this.marker) return;
+
+    const targetIdx = Math.min(
+      this.routeCoordinates.length - 1,
+      Math.floor(progress * (this.routeCoordinates.length - 1))
+    );
+
+    const currentPos = this.routeCoordinates[targetIdx];
+    this.marker.setLatLng(currentPos);
+
+    // 🟢 1. 走行済みルートをスライスしてネオンレッドに染め上げる
+    const traveledCoords = this.routeCoordinates.slice(0, targetIdx + 1);
+    if (this.traveledLine) {
+      this.traveledLine.setLatLngs(traveledCoords);
+    }
+
+    // 🟢 2. 自動追跡（Auto-Tracking）＆ 走行開始時の自動クローズアップズーム
+    if (progress > 0) {
+      if (!this.hasZoomedIn) {
+        // スタートした瞬間にズームレベルを16に引き上げ、マーカーを巨大化・ハッキリ見せる！
+        this.map.setView(currentPos, 16, { animate: true });
+        this.hasZoomedIn = true;
+      } else {
+        // 以降は現在地が常に中央になるように自動パニング追跡
+        this.map.panTo(currentPos);
+      }
+    } else {
+      // 停止（待機）時は現在地に視点を戻す
+      this.map.panTo(currentPos);
+    }
+
+    const posEl = document.getElementById('map-pos');
+    if (posEl) posEl.innerText = `POS: LAT ${currentPos[0].toFixed(4)} / LON ${currentPos[1].toFixed(4)}`;
+
+    const pctEl = document.getElementById('map-pct');
+    if (pctEl) pctEl.innerText = (progress * 100).toFixed(1);
+
+    this.checkpoints.forEach(c => {
+      if (targetIdx >= c.index && !c.passed) {
+        c.passed = true;
+        if (onCheckpointPassed) onCheckpointPassed(c.name);
+      }
+    });
   }
 }
