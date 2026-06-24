@@ -10,11 +10,12 @@ class MapService {
     }).addTo(this.map);
 
     this.routeLine = null;
-    this.traveledLine = null; // 🟢 走行済みの軌跡（赤線）回路を再配備
+    this.traveledLine = null; // 走行済みの軌跡（赤線）
     this.routeCoordinates = [];
     this.checkpoints = [];
     this.marker = null;
     this.hasZoomedIn = false; // 走行開始時の自動クローズアップ制御用フラグ
+    this.totalDistanceKm = 0; // 🟢 クラウド・テレメトリー用距離バッファ
   }
 
   async fetchOSRMRoute(start, end) {
@@ -27,6 +28,7 @@ class MapService {
 
       this.routeCoordinates = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
       const distanceKm = data.routes[0].distance / 1000;
+      this.totalDistanceKm = distanceKm; // 🟢 総距離をマシンのメモリに完全記録！
 
       // 旧レイヤーの残像を完全消去
       if (this.routeLine) this.map.removeLayer(this.routeLine);
@@ -56,7 +58,7 @@ class MapService {
         icon: L.divIcon({ className: 'cyber-marker', iconSize: [12, 12] })
       }).addTo(this.map);
 
-      this.hasZoomedIn = false; // ルート生成時にフラグを初期化
+      this.hasZoomedIn = false; 
       return { success: true, distance: distanceKm };
     } catch (e) {
       console.error(e);
@@ -105,32 +107,23 @@ class MapService {
     const currentPos = this.routeCoordinates[targetIdx];
     this.marker.setLatLng(currentPos);
 
-    // 🟢 1. 走行済みルートをスライスしてネオンレッドに染め上げる
+    // 走行済みルートをスライスしてネオンレッドに染め上げる
     const traveledCoords = this.routeCoordinates.slice(0, targetIdx + 1);
     if (this.traveledLine) {
       this.traveledLine.setLatLngs(traveledCoords);
     }
 
-    // 🟢 2. 自動追跡（Auto-Tracking）＆ 走行開始時の自動クローズアップズーム
+    // 自動追跡＆ズーム制御
     if (progress > 0) {
       if (!this.hasZoomedIn) {
-        // スタートした瞬間にズームレベルを16に引き上げ、マーカーを巨大化・ハッキリ見せる！
         this.map.setView(currentPos, 16, { animate: true });
         this.hasZoomedIn = true;
       } else {
-        // 以降は現在地が常に中央になるように自動パニング追跡
         this.map.panTo(currentPos);
       }
     } else {
-      // 停止（待機）時は現在地に視点を戻す
       this.map.panTo(currentPos);
     }
-
-    const posEl = document.getElementById('map-pos');
-    if (posEl) posEl.innerText = `POS: LAT ${currentPos[0].toFixed(4)} / LON ${currentPos[1].toFixed(4)}`;
-
-    const pctEl = document.getElementById('map-pct');
-    if (pctEl) pctEl.innerText = (progress * 100).toFixed(1);
 
     this.checkpoints.forEach(c => {
       if (targetIdx >= c.index && !c.passed) {

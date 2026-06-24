@@ -113,7 +113,9 @@
       <div class="timer-box">
         <div id="real-clock-display">00:00:00</div>
         <div id="pomo-state-indicator" style="font-size: 0.8rem; letter-spacing: 2px; margin-bottom: 5px; font-weight: bold;"></div>
+        
         <div class="glitch" id="timer-display" data-text="00:00">00:00</div>
+        
         <div id="total-remain-display">TOTAL REMAIN: 00:00:00</div>
         <div id="status-sub" style="display: none;">[ SYSTEM: STANDBY ]</div>
       </div>
@@ -131,16 +133,10 @@
           <video id="cockpit-main-video" src="video/focus1.mp4" loop muted playsinline></video>
         </div>
       </div>
-
-      <div class="map-overlay-stats" style="display: none;">
-        <div id="map-pos">POS: --</div>
-        <div id="map-speed">SPD: --</div>
-        <div id="map-pct">0.0</div>
-        <div id="map-rem">-.--</div>
-      </div>
       
       <div class="btn-group">
         <button id="start-btn">ENGAGE</button>
+        <button id="pip-btn" style="border-color: var(--highlight-yellow); color: var(--highlight-yellow);">HUD MODE</button>
         <button id="reset-btn">ABORT DNF</button>
       </div>
     </div>
@@ -171,6 +167,23 @@
         <div class="xp-bar-container" style="background: rgba(5,255,161,0.05); height: 5px;"><div id="tyre-bar" style="width: 0%; height:100%; background: var(--success-green);"></div></div>
       </div>
 
+      <div class="f1-telemetry-hud" style="margin-top: 15px;">
+        <div class="tel-row">
+          <span class="tel-label">SPEED</span>
+          <span class="tel-value" id="tel-speed">0</span>
+          <span class="tel-unit">KM/H</span>
+        </div>
+        <div class="tel-row">
+          <span class="tel-label">GEAR</span>
+          <span class="tel-value" id="tel-gear">N</span>
+        </div>
+        <div class="tel-row" style="border-top: 1px dashed rgba(0,255,255,0.2); padding-top: 6px; margin-top: 4px;">
+          <span class="tel-label">DISTANCE</span>
+          <span class="tel-value" id="tel-dst">0.00 / 0.00</span>
+          <span class="tel-unit" style="margin-left: 4px;">KM</span>
+        </div>
+      </div>
+
       <div class="panel-header" id="map-rem-label" style="margin-top: 20px; margin-bottom: 10px;">📊 LIVE_DATA_STREAM_WIRE</div>
       
       <div class="log-stream-container">
@@ -183,7 +196,7 @@
   <div id="lap-counter" style="display:none;"></div>
 
   <audio id="local-work-audio" src="music/work.m4a" loop></audio>
-  <audio id="local-rest-audio" src="music/F1.m4a" loop></audio>
+  <audio id="local-rest-audio" src="music/rest.m4a" loop></audio>
 
   <script src="mapService.js"></script>
   <script src="app.js"></script>

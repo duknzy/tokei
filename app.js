@@ -2,7 +2,7 @@ const mapService = new MapService();
 const timerWorker = new Worker('timerWorker.js');
 
 // =======================================================
-// 📡 FIREBASE TELEMETRY NETWORK CONFIGURATION (⚡同期・引継ぎ強化版)
+// 📡 FIREBASE TELEMETRY NETWORK CONFIGURATION
 // =======================================================
 const firebaseConfig = {
   apiKey: "AIzaSyAIPTf5hDce2On4yTnyz4k_NU_Y9zf8Rgc",
@@ -15,16 +15,15 @@ const firebaseConfig = {
   measurementId: "G-T250Y2PDTB"
 };
 
+
 let db = null;
-const USER_ID = "operator_hiro"; // 🏁 お前のオペレーターIDをここに完全ロック！
+const USER_ID = "operator_hiro"; 
 
 try {
   if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     pushLog("> TELEMETRY_SERVER: CLOUD FACTORY LINK ESTABLISHED.", "success");
-    
-    // 🟢 アプリ起動時にクラウドから過去の戦績・レベル・累計データを自動引き継ぎ！
     loadUserDataFromCloud();
   } else {
     pushLog("> TELEMETRY_SERVER: LOCAL MODE (FIREBASE KEY NOT SET).", "system");
@@ -33,59 +32,15 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-// 🟢 クラウドからお前の全ステータス（レベル、XP、通算時間）をロードして復元する回路
-async function loadUserDataFromCloud() {
-  if (!db) return;
-  try {
-    pushLog("> TELEMETRY_SERVER: FETCHING DRIVER PROFILE...");
-    const doc = await db.collection("user_profile").doc(USER_ID).get();
-    
-    if (doc.exists) {
-      const cloudData = doc.data();
-      userState.level = cloudData.level || 1;
-      userState.xp = cloudData.xp || 0;
-      
-      // 過去の通算走行リザルトも引き継いで同期
-      totalWorkTime = cloudData.totalWorkTime || 0;
-      totalRestTime = cloudData.totalRestTime || 0;
-      
-      pushLog(`>>> [DATA_SYNC]: PROFILE RESTORED. RANK: OPERATOR [LV.${userState.level}] <<<`, "success");
-    } else {
-      pushLog("> TELEMETRY_SERVER: NO PREVIOUS PROFILE DETECTED. INITIALIZING NEW GRID.", "system");
-      await saveUserDataToCloud(); // 初回プロフィール作成
-    }
-    updateStatusUI();
-    resetTimeState();
-  } catch (error) {
-    console.error("Cloud Load Error:", error);
-    pushLog("> TELEMETRY_SERVER: PROFILE SYNC REJECTED. RUNNING IN LOCAL MEMORY.", "radio-gp");
-  }
-}
-
-// 🟢 現在のステータス（レベル、XP、通算時間）をクラウドへ保存する回路
-async function saveUserDataToCloud() {
-  if (!db) return;
-  try {
-    await db.collection("user_profile").doc(USER_ID).set({
-      level: userState.level,
-      xp: userState.xp,
-      totalWorkTime: totalWorkTime,
-      totalRestTime: totalRestTime,
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    pushLog("> TELEMETRY_SERVER: CLOUD BACKUP SEQUENCE COMPLETED.", "success");
-  } catch (error) {
-    console.error("Cloud Save Error:", error);
-    pushLog("> TELEMETRY_SERVER: BACKUP CRITICAL FAILURE.", "radio-gp");
-  }
-}
-
 // =======================================================
 // 🎸 LOCAL AUDIO & MULTI-VIDEO ENGINE CIRCUIT
 // =======================================================
 const workAudio = document.getElementById('local-work-audio');
 const restAudio = document.getElementById('local-rest-audio');
 const cockpitVideo = document.getElementById('cockpit-main-video'); 
+
+let pipWindow = null; 
+let lastRegisteredVirtualLap = 1; 
 
 const VIDEO_PLAYLIST = [
   "video/focus1.mp4",
@@ -113,6 +68,48 @@ if (cockpitVideo) {
       cockpitVideo.play().catch(err => console.warn("Playlist Continuous Play Blocked:", err));
     }
   });
+}
+
+async function loadUserDataFromCloud() {
+  if (!db) return;
+  try {
+    pushLog("> TELEMETRY_SERVER: FETCHING DRIVER PROFILE...");
+    const doc = await db.collection("user_profile").doc(USER_ID).get();
+    
+    if (doc.exists) {
+      const cloudData = doc.data();
+      userState.level = cloudData.level || 1;
+      userState.xp = cloudData.xp || 0;
+      totalWorkTime = cloudData.totalWorkTime || 0;
+      totalRestTime = cloudData.totalRestTime || 0;
+      pushLog(`>>> [DATA_SYNC]: PROFILE RESTORED. RANK: OPERATOR [LV.${userState.level}] <<<`, "success");
+    } else {
+      pushLog("> TELEMETRY_SERVER: NO PREVIOUS PROFILE DETECTED. INITIALIZING NEW GRID.", "system");
+      await saveUserDataToCloud();
+    }
+    updateStatusUI();
+    resetTimeState();
+  } catch (error) {
+    console.error("Cloud Load Error:", error);
+    pushLog("> TELEMETRY_SERVER: PROFILE SYNC REJECTED. RUNNING IN LOCAL MEMORY.", "radio-gp");
+  }
+}
+
+async function saveUserDataToCloud() {
+  if (!db) return;
+  try {
+    await db.collection("user_profile").doc(USER_ID).set({
+      level: userState.level,
+      xp: userState.xp,
+      totalWorkTime: totalWorkTime,
+      totalRestTime: totalRestTime,
+      lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    pushLog("> TELEMETRY_SERVER: CLOUD BACKUP SEQUENCE COMPLETED.", "success");
+  } catch (error) {
+    console.error("Cloud Save Error:", error);
+    pushLog("> TELEMETRY_SERVER: BACKUP CRITICAL FAILURE.", "radio-gp");
+  }
 }
 
 function safeSetText(id, text) {
@@ -390,6 +387,9 @@ function resetTimeState() {
   pomoWorkDuration = workMins * 60 * 1000;
   pomoRestDuration = restMins * 60 * 1000;
 
+  lastRegisteredVirtualLap = 1; 
+  if (mapService) mapService.resetCheckpoints();
+
   if (currentMode === "SPRINT") {
     timeLeft = pomoWorkDuration;
     updateDisplay(timeLeft);
@@ -422,7 +422,6 @@ function resetTimeState() {
 async function initApp() {
   pushLog("> TRACK_SYSTEM: CONNECTING TO TELEMETRY NETWORK...");
   await loadSelectedRoute();
-  // 注意：起動時にFirebase読込が完了した後に初期化が走るよう、loadUserDataFromCloud内でも呼んでいます
   resetTimeState();
   updateStatusUI();
   
@@ -483,6 +482,7 @@ function updateProgressMeter(progress) {
   });
 }
 
+// 🟢 TIMER WORKER INTERFACE (物理的同期回路に修正済み)
 timerWorker.onmessage = function(e) {
   if (e.data === 'TICK' && isRunning) {
     const now = Date.now();
@@ -492,15 +492,10 @@ timerWorker.onmessage = function(e) {
     if (currentMode === "SPRINT") {
       timeLeft -= delta;
       totalWorkTime += delta;
-      
       tyreTemp = Math.min(100.0, tyreTemp + (delta / 12000));
       ersPercent = Math.max(0, ersPercent - (delta / 36000));
       
       const progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
-      mapService.updatePosition(progress, (checkpointName) => {
-        pushLog(`>> TACTICAL_GPS: PASSED [${checkpointName}]`, "system");
-      });
-      
       updateProgressMeter(progress);
 
       if (timeLeft <= 0) {
@@ -513,29 +508,13 @@ timerWorker.onmessage = function(e) {
     } else if (currentMode === "ENDURANCE") {
       timeLeft += delta; 
       totalWorkTime += delta;
-
       tyreTemp = Math.min(100.0, tyreTemp + (delta / 12000));
       ersPercent = Math.max(0, ersPercent - (delta / 36000));
-
       updateDisplay(timeLeft);
 
       let currentLapElapsed = timeLeft % TIME_PER_LAP;
       let progress = currentLapElapsed / TIME_PER_LAP;
-      
       updateProgressMeter(progress);
-
-      let calculatedLap = Math.floor(timeLeft / TIME_PER_LAP) + 1;
-      if (calculatedLap > enduranceLap) {
-        enduranceLap = calculatedLap;
-        safeSetText('lap-counter', `[LAP ${enduranceLap}]`);
-        mapService.resetCheckpoints(); 
-        pushLog(`>>> LAP_${enduranceLap}: ENTERING NEW SECTOR GRID. PUSH HARD!`, "success");
-        addXP(20);
-      }
-
-      mapService.updatePosition(progress, (checkpointName) => {
-        pushLog(`>> ENDURANCE_GPS: LAP ${enduranceLap} [${checkpointName}] PASSED`, "system");
-      });
 
     } else if (currentMode === "POMODORO") {
       pomoTotalTimeLeft -= delta;
@@ -544,26 +523,19 @@ timerWorker.onmessage = function(e) {
       if (pomoTotalTimeLeft <= 0) {
         updateTotalRemainDisplay(0);
         updateProgressMeter(1.0);
-        mapService.updatePosition(1.0);
         finishSession("GRAND PRIX COMPLETE: FULL RACE DISTANCE COVERED!", 50, "FINISHED");
         return;
       }
-
-      const overallProgress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
 
       if (pomoState === "WORK") {
         timeLeft -= delta;
         totalWorkTime += delta;
         currentWorkAccumulated += delta; 
-        
         tyreTemp = Math.min(100.0, tyreTemp + (delta / 10000)); 
         ersPercent = Math.max(0, ersPercent - (delta / 30000)); 
 
-        mapService.updatePosition(overallProgress, (checkpointName) => {
-          pushLog(`>> POMODORO_GPS: STINT ${currentPomoCycle} [${checkpointName}] PASSED`, "system");
-        });
-
-        updateProgressMeter(overallProgress);
+        const stintProgress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
+        updateProgressMeter(stintProgress);
 
         if (timeLeft <= 0) {
           pomoState = "REST";
@@ -573,7 +545,6 @@ timerWorker.onmessage = function(e) {
             pomoIndicator.style.color = "var(--success-green)";
           }
           pushLog(`>>> PIT-STOP TRIGGERED (STINT ${currentPomoCycle} END): ENTERING BOX. <<<`, "system");
-          
           triggerRadioSound(); 
           manageBgmPlayback(); 
           addXP(15);
@@ -583,30 +554,27 @@ timerWorker.onmessage = function(e) {
       } else {
         timeLeft -= delta;
         totalRestTime += delta; 
-
         tyreTemp = Math.max(60.0, tyreTemp - (delta / 5000));      
         ersPercent = Math.min(100, ersPercent + (delta / 4000));   
-
-        updateProgressMeter(overallProgress);
+        updateProgressMeter(0);
 
         if (timeLeft <= 0) {
           pomoState = "WORK";
           currentPomoCycle++;
           timeLeft = pomoWorkDuration;
-          mapService.resetCheckpoints(); 
+          if (mapService) mapService.resetCheckpoints(); 
+          lastRegisteredVirtualLap = 1; 
           if(pomoIndicator) {
             pomoIndicator.innerText = `[[ STINT ${currentPomoCycle}: STIMULUS_RUN ]]`;
             pomoIndicator.style.color = "var(--accent-magenta)";
           }
           pushLog(`>>> GREEN LIGHT (STINT ${currentPomoCycle}): BOX-OUT! ATTACK THE TRACK! <<<`, "success");
-          
           triggerRadioSound(); 
           manageBgmPlayback(); 
         }
         updateDisplay(timeLeft);
       }
     }
-
     updateLiveTelemetry();
   }
 };
@@ -622,7 +590,7 @@ async function finishSession(logMsg, earnedXP = 40, raceStatus = "FINISHED") {
   }
 
   manageBgmPlayback(); 
-  addXP(earnedXP); // ⚠️ 注意: ここでレベルアップ処理とsaveUserDataToCloud()が自動連動するぞ！
+  addXP(earnedXP); 
   
   const statusSubEl = document.getElementById('status-sub');
   if(statusSubEl) statusSubEl.innerText = raceStatus === "FINISHED" ? "[ RACE_COMPLETE ]" : "[ DNF_RETIRED ]";
@@ -635,7 +603,6 @@ async function finishSession(logMsg, earnedXP = 40, raceStatus = "FINISHED") {
   
   const hudDiffEl = document.getElementById('hud-diff');
   const strategyName = hudDiffEl ? hudDiffEl.innerText : "GRAND_PRIX";
-  const engineMap = `${strategyName} (${raceStatus})`;
 
   pushLog(`========================================`, "system");
   if (raceStatus === "FINISHED") {
@@ -643,17 +610,8 @@ async function finishSession(logMsg, earnedXP = 40, raceStatus = "FINISHED") {
   } else {
     pushLog(`[TEAM RADIO] GP: "Copy that, Hiro. DNF confirmed. Bring the car back straight to the box."`, "radio-gp");
   }
-  pushLog(`[TEAM RADIO] --- TELEMETRY RECAP ---`, "radio-telemetry");
-  pushLog(`[TEAM RADIO] CIRCUIT : ${trackName}`, "radio-telemetry");
-  pushLog(`[TEAM RADIO] STRATEGY: ${engineMap}`, "radio-telemetry");
-  pushLog(`[TEAM RADIO] WORK    : ${formatMsToTimeStr(totalWorkTime)}`, "radio-telemetry");
-  pushLog(`[TEAM RADIO] PIT STOP: ${formatMsToTimeStr(totalRestTime)}`, "radio-telemetry");
-  pushLog(`[TEAM RADIO] RATIO   : ${ratio}% EFFICIENCY`, "radio-telemetry");
-  pushLog(`[TEAM RADIO] CREDITS : +${earnedXP} XP EARNED`, "radio-telemetry");
-  pushLog(`[TEAM RADIO] GP: "Data stream locked. Resetting systems for the next stint. Head down."`, "radio-gp");
   pushLog(`========================================`, "system");
 
-  // 🟢 走行ごとのセッション単体記録をクラウドへ完全保存！
   if (db) {
     try {
       await db.collection("race_results").add({
@@ -668,8 +626,6 @@ async function finishSession(logMsg, earnedXP = 40, raceStatus = "FINISHED") {
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
       pushLog("> TELEMETRY_SERVER: DATABASE RECORD ARCHIVED SECURELY.", "success");
-      
-      // レベル・XP・通算時間を全体プロファイルへ最新アップデート
       await saveUserDataToCloud();
     } catch (error) {
       pushLog("> TELEMETRY_SERVER: NETWORK TRANSMISSION ERROR.", "radio-gp");
@@ -678,7 +634,6 @@ async function finishSession(logMsg, earnedXP = 40, raceStatus = "FINISHED") {
   }
 
   setTimeout(() => {
-    // セッションクリア（累計保存後に実行されるので安全）
     totalWorkTime = 0;
     totalRestTime = 0;
     ersPercent = 100;
@@ -707,6 +662,7 @@ function updateTotalRemainDisplay(ms) {
   if(totalRemainDisplay) totalRemainDisplay.innerText = `TOTAL REMAIN: ${h}:${m}:${s}`;
 }
 
+// 🟢 📡 オンボード・コアテレメトリー計算モジュール（完全同期・真の時速演算回路）
 function updateLiveTelemetry() {
   const statusEl = document.getElementById('hud-status');
   
@@ -759,6 +715,208 @@ function updateLiveTelemetry() {
     tyreBar.style.width = `${tyreWidth}%`;
     tyreBar.style.background = tyreTemp >= 90.0 ? "var(--accent-neon-pink)" : "var(--success-green)";
   }
+
+  // ▼ ここからがマップ・時速・距離の完全同期回路だ！
+  const speedEl = document.getElementById('tel-speed');
+  const gearEl = document.getElementById('tel-gear');
+  const dstEl = document.getElementById('tel-dst');
+
+  if (speedEl && gearEl && dstEl) {
+    let progress = 0;
+    let currentWorkMins = 30;
+
+    // タイマーの進行度（0.0〜1.0）と、設定時間（分）を取得
+    if (currentMode === "POMODORO") {
+      progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
+      currentWorkMins = totalWorkExpected ? (totalWorkExpected / 1000 / 60) : 150;
+    } else if (currentMode === "SPRINT") {
+      progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
+      currentWorkMins = pomoWorkDuration ? (pomoWorkDuration / 1000 / 60) : 30;
+    } else {
+      progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
+      currentWorkMins = TIME_PER_LAP / 1000 / 60; // 30固定
+    }
+
+    const realRouteDist = mapService.totalDistanceKm || 0;
+
+    // 🛑 停止時 / 待機時の処理
+    if (!isRunning) {
+      speedEl.innerText = "0";
+      gearEl.innerText = "N";
+      gearEl.style.color = "var(--highlight-yellow)";
+      dstEl.innerText = `${realRouteDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
+    } else if (currentMode === "POMODORO" && pomoState === "REST") {
+      // ピットストップ中（休憩）
+      speedEl.innerText = "0";
+      gearEl.innerText = "N";
+      gearEl.style.color = "var(--highlight-yellow)";
+      const remainDist = Math.max(0, realRouteDist * (1 - progress));
+      dstEl.innerText = `${remainDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
+    } else {
+      // 🟢 アクティブ走行時 (タイマー進行に合わせた距離と時速の逆算)
+      const remainDist = Math.max(0, realRouteDist * (1 - progress));
+      dstEl.innerText = `${remainDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
+
+      // 🏎️ 真の時速計算: 距離(km) ÷ 設定時間(hour)
+      const currentWorkHours = currentWorkMins / 60;
+      const trueSpeed = currentWorkHours > 0 ? (realRouteDist / currentWorkHours) : 0;
+
+      // 速度感演出のための微小ジッター（時速20km以上出ている時のみ追加）
+      let jitter = 0;
+      if (trueSpeed > 20) {
+        jitter = Math.floor(Math.sin(Date.now() / 150) * 2);
+      }
+      const currentSpeed = Math.floor(trueSpeed) + jitter;
+
+      speedEl.innerText = currentSpeed;
+
+      // 速度に応じたギアチェンジ
+      if (currentSpeed > 250) { gearEl.innerText = "8"; gearEl.style.color = "var(--accent-neon-pink)"; }
+      else if (currentSpeed > 150) { gearEl.innerText = "7"; gearEl.style.color = "var(--accent-neon-pink)"; }
+      else if (currentSpeed > 80) { gearEl.innerText = "6"; gearEl.style.color = "var(--accent-neon-cyan)"; }
+      else if (currentSpeed > 40) { gearEl.innerText = "4"; gearEl.style.color = "var(--accent-neon-cyan)"; }
+      else if (currentSpeed > 10) { gearEl.innerText = "2"; gearEl.style.color = "var(--success-green)"; }
+      else { gearEl.innerText = "1"; gearEl.style.color = "var(--success-green)"; }
+
+      // 📍 マップ位置の完全同期（タイマーの進捗＝現在地）
+      mapService.updatePosition(progress, (checkpointName) => {
+        pushLog(`>> TACTICAL_GPS: PASSED [${checkpointName}]`, "system");
+      });
+
+      // 耐久モード時の周回処理（ENDURANCEのみループ）
+      if (currentMode === "ENDURANCE") {
+        const currentLapCount = Math.floor(totalWorkTime / TIME_PER_LAP) + 1;
+        if (currentLapCount > lastRegisteredVirtualLap) {
+          lastRegisteredVirtualLap = currentLapCount;
+          if (mapService) mapService.resetCheckpoints();
+          pushLog(`>>> LAP ${currentLapCount}: LINE CROSS. PUSH!`, "success");
+        }
+      }
+    }
+  }
+
+  // 【最前面ステアリングHUD同期回路】
+  if (pipWindow) {
+    let stateText = "[[ STANDBY ]]";
+    let stateColor = "var(--highlight-yellow)";
+    let progress = 0;
+    
+    if (isRunning) {
+      if (currentMode === "POMODORO") {
+        stateText = pomoState === "WORK" ? `[[ STINT ${currentPomoCycle} ]]` : `[[ PIT ${currentPomoCycle} ]]`;
+        stateColor = pomoState === "WORK" ? "var(--accent-neon-pink)" : "var(--success-green)";
+        progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
+      } else if (currentMode === "SPRINT") {
+        stateText = "[[ QUALIFY ]]";
+        stateColor = "var(--success-green)";
+        progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
+      } else {
+        stateText = `[[ LAP ${enduranceLap} ]]`;
+        stateColor = "var(--accent-neon-cyan)";
+        progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
+      }
+    } else {
+      if (totalWorkTime > 0 || totalRestTime > 0) {
+        stateText = "[[ RED FLAG ]]";
+        stateColor = "var(--text-white)";
+      } else {
+        stateText = "[[ STANDBY ]]";
+        stateColor = "var(--highlight-yellow)";
+      }
+      if (currentMode === "POMODORO") progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
+      else if (currentMode === "SPRINT") progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
+      else progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
+    }
+    updatePipHUD(timeLeft, progress, stateText, stateColor);
+  }
+}
+
+function updatePipHUD(ms, progress, stateText, stateColor) {
+  if (!pipWindow) return;
+  const totalSec = Math.floor(ms / 1000);
+  const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
+  const s = String(totalSec % 60).padStart(2, '0');
+
+  const timerEl = pipWindow.document.getElementById('pip-timer');
+  if (timerEl) timerEl.innerText = `${m}:${s}`;
+
+  const stateEl = pipWindow.document.getElementById('pip-state');
+  if (stateEl) {
+    stateEl.innerText = stateText;
+    stateEl.style.color = stateColor;
+  }
+
+  const rpmBars = pipWindow.document.querySelectorAll('.pip-rpm-bar');
+  const activeCount = Math.min(10, Math.floor(progress * 10));
+  rpmBars.forEach((b, i) => {
+    if (i < activeCount) {
+      if (i >= 7) {
+        b.style.background = 'var(--accent-neon-pink)';
+        b.style.boxShadow = '0 0 10px var(--accent-neon-pink)';
+      } else {
+        b.style.background = 'var(--accent-neon-cyan)';
+        b.style.boxShadow = '0 0 10px var(--accent-neon-cyan)';
+      }
+    } else {
+      b.style.background = 'rgba(0, 255, 255, 0.04)';
+      b.style.boxShadow = 'none';
+    }
+  });
+}
+
+async function togglePipHUD() {
+  if (pipWindow) {
+    pipWindow.close();
+    return;
+  }
+
+  if (!('documentPictureInPicture' in window)) {
+    pushLog("> ERROR: DOCUMENT PIP API NOT SUPPORTED IN THIS BROWSER.", "radio-gp");
+    alert("最前面HUDモード非対応ブラウザです。");
+    return;
+  }
+
+  try {
+    pipWindow = await window.documentPictureInPicture.requestWindow({ width: 340, height: 200 });
+
+    const styles = document.querySelectorAll('link[rel="stylesheet"], style');
+    styles.forEach(style => pipWindow.document.head.appendChild(style.cloneNode(true)));
+    
+    const fontLink = pipWindow.document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=VT323&display=swap';
+    pipWindow.document.head.appendChild(fontLink);
+
+    pipWindow.document.body.style.backgroundColor = '#06020f';
+    pipWindow.document.body.style.margin = '0';
+    pipWindow.document.body.style.padding = '12px';
+    pipWindow.document.body.style.display = 'flex';
+    pipWindow.document.body.style.alignItems = 'center';
+    pipWindow.document.body.style.justifyContent = 'center';
+    pipWindow.document.body.style.height = '100vh';
+    pipWindow.document.body.style.overflow = 'hidden';
+
+    pipWindow.document.body.innerHTML = `
+      <div style="width: 100%; text-align: center; border: 2px solid var(--accent-neon-cyan); box-shadow: 0 0 15px rgba(0,255,255,0.2); padding: 12px; background: #010103; font-family: 'VT323', monospace;">
+        <div id="pip-state" style="font-size: 1.2rem; color: var(--highlight-yellow); letter-spacing: 2px; font-weight: bold; margin-bottom: 2px;">[[ STANDBY ]]</div>
+        <div id="pip-timer" style="font-size: 4.8rem; font-weight: bold; color: #fff; text-shadow: 0 0 15px var(--accent-neon-cyan); letter-spacing: 2px; line-height: 1; margin-bottom: 10px;">00:00</div>
+        <div style="display: flex; gap: 4px; width: 100%; height: 12px;">
+          ${Array(10).fill().map(() => `<div class="pip-rpm-bar" style="height: 100%; flex: 1; background: rgba(0,255,255,0.04); border: 1px solid rgba(0,255,255,0.1); transition: background 0.1s;"></div>`).join('')}
+        </div>
+      </div>
+    `;
+
+    updateLiveTelemetry();
+
+    pipWindow.addEventListener('unload', () => {
+      pipWindow = null;
+      pushLog("> AUDIO_SYSTEM: HUD MODE DEACTIVATED. RETURN TO COCKPIT MAIN MONITOR.", "system");
+    });
+
+    pushLog("> AUDIO_SYSTEM: STEERING HUD MODE ENGAGED. POPUP LINK ACTIVE.", "success");
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function updateDisplay(ms) {
@@ -792,8 +950,6 @@ function addXP(amount) {
     pushLog(`>>> [NEURAL_UPGRADE]: NEW LEVEL ATTAINED: LV.${userState.level} <<<`, "system");
   }
   updateStatusUI();
-  
-  // 🟢 XP増減が走ったら、即座にクラウドのバックアップデータを更新
   saveUserDataToCloud();
 }
 
@@ -818,7 +974,6 @@ if(startBtn) {
         resetTimeState();
         startBtn.disabled = false;
       }
-
       isRunning = true;
       startTime = Date.now(); 
       timerWorker.postMessage('START');
@@ -831,8 +986,6 @@ if(startBtn) {
       startBtn.innerText = "RESUME";
       safeSetText('status-sub', "[ TRANSIT_PAUSED ]");
       pushLog(">> SYSTEM: LINK SUSPENDED. RED FLAG STATUS.", "system");
-      
-      // 🟢 HALT（一時停止）時にも念のため進捗データをクラウドへオートセーブ
       saveUserDataToCloud();
     }
     updateLiveTelemetry();
@@ -864,23 +1017,18 @@ function completelyResetMachine() {
   safeSetText('status-sub', "[ SYSTEM: STANDBY ]");
   pushLog(">> ALERT: RACING LINE RESET TO ORIGINAL GRID.", "change");
   manageBgmPlayback(); 
-  
-  // 完全リセット時にもクラウドと状態を同期
   saveUserDataToCloud();
 }
 
 setTimeout(() => {
   if (!mapService || !mapService.map) return;
-  
   mapService.map.on('click', async function(e) {
     if (isRunning) {
       pushLog("> TRACK_SYSTEM: TACTICAL MAP CLICK DENIED. SECTOR NAVIGATION LOCKED DURING RACE.", "radio-gp");
       return; 
     }
-
     const routePresetEl = document.getElementById('route-preset');
     if (!routePresetEl || routePresetEl.value !== 'custom') return;
-    
     const latlng = e.latlng;
     if (mapClickCount === 0) {
       customStartCoords = [latlng.lat, latlng.lng];
@@ -896,7 +1044,6 @@ setTimeout(() => {
       if(endInput) endInput.value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
       pushLog(`> GPS_CALIBRATION: END POINT PINNED [${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}]`, "system");
       mapClickCount = 0;
-      
       safeSetText('current-track-name', "ROUTE: MAP PINPOINT SECTOR");
       const result = await mapService.fetchOSRMRoute(customStartCoords, customEndCoords);
       if (result.success) {
@@ -913,48 +1060,35 @@ if(searchRouteBtn) {
       pushLog("> ERROR: RACING LINE NAVIGATION CHANGING BLOCKED DURING ACTIVE STINT.", "radio-gp");
       return;
     }
-
     const startInput = document.getElementById('start-name-input');
     const endInput = document.getElementById('end-name-input');
     const startName = startInput ? startInput.value.trim() : "";
     const endName = endInput ? endInput.value.trim() : "";
-    
     if (!startName || !endName) {
       pushLog("> ERROR: BOTH START AND END PLACES ARE REQUIRED FOR LOCK-ON.", "radio-gp");
       return;
     }
-    
     pushLog("> TELEMETRY: RESOLVING GRID COORDINATES FROM WORLD DATABASE...");
-    
     const fetchCoords = async (query) => {
       try {
-        if (query.includes(',')) {
-          return query.split(',').map(v => parseFloat(v.trim()));
-        }
+        if (query.includes(',')) return query.split(',').map(v => parseFloat(v.trim()));
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
         const res = await fetch(url);
         const data = await res.json();
-        if (data && data.length > 0) {
-          return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-        }
+        if (data && data.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
         return null;
-      } catch (err) {
-        return null;
-      }
+      } catch (err) { return null; }
     };
-
     customStartCoords = await fetchCoords(startName);
     if (!customStartCoords) {
       pushLog(`> ERROR: COULD NOT RESOLVE STARTING GRID [${startName}]`, "radio-gp");
       return;
     }
-    
     customEndCoords = await fetchCoords(endName);
     if (!customEndCoords) {
       pushLog(`> ERROR: COULD NOT RESOLVE DESTINATION GRID [${endName}]`, "radio-gp");
       return;
     }
-
     safeSetText('current-track-name', `ROUTE: ${startName.toUpperCase()} ➔ ${endName.toUpperCase()}`);
     const result = await mapService.fetchOSRMRoute(customStartCoords, customEndCoords);
     if (result.success) {
@@ -971,6 +1105,11 @@ if (audioRouteSelect) {
     manageBgmPlayback();      
     pushLog(`> AUDIO_SYSTEM: INTERCOM CHANNEL SWITCHED TO [${audioRouteSelect.value.toUpperCase()}].`, "system");
   });
+}
+
+const pipBtn = document.getElementById('pip-btn');
+if (pipBtn) {
+  pipBtn.addEventListener('click', () => { togglePipHUD(); });
 }
 
 initApp();
