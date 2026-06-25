@@ -15,7 +15,6 @@ const firebaseConfig = {
   measurementId: "G-T250Y2PDTB"
 };
 
-
 let db = null;
 const USER_ID = "operator_hiro"; 
 
@@ -54,18 +53,33 @@ if (workAudio && restAudio) {
   restAudio.addEventListener('error', () => console.warn(">> BGM_SYSTEM: music/rest.m4a not detected."));
 }
 
+// 🟢 動画終了時に確実に次の動画へロード＆強制再生を叩き込む回路
 if (cockpitVideo) {
   cockpitVideo.addEventListener('ended', () => {
     currentVideoIdx = (currentVideoIdx + 1) % VIDEO_PLAYLIST.length;
-    cockpitVideo.src = VIDEO_PLAYLIST[currentVideoIdx];
-    pushLog(`> VIDEO_SYSTEM: TRACK ENDED. ROTATING TO NEXT COMPONENT [${currentVideoIdx + 1}/${VIDEO_PLAYLIST.length}]`, "system");
     
+    // ソースを更新し、明示的にロードを走らせる
+    cockpitVideo.src = VIDEO_PLAYLIST[currentVideoIdx];
+    cockpitVideo.load(); 
+    
+    pushLog(`> VIDEO_SYSTEM: TRACK ENDED. SHIFT UP NEXT COMPONENT [${currentVideoIdx + 1}/${VIDEO_PLAYLIST.length}]`, "system");
+    
+    // 走行中であれば、ミュート状態を判定して無条件で強制ドライブ
     if (isRunning) {
       const audioRouteEl = document.getElementById('audio-route-select');
       const audioRoute = audioRouteEl ? audioRouteEl.value : 'bgm';
       cockpitVideo.muted = (audioRoute !== 'video');
       cockpitVideo.volume = 0.45;
-      cockpitVideo.play().catch(err => console.warn("Playlist Continuous Play Blocked:", err));
+      
+      // ブラウザブロック対策の強制プレイアタック
+      const playPromise = cockpitVideo.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(err => {
+          console.warn("Auto Play Stream Blocked. Retrying with mute encryption.", err);
+          cockpitVideo.muted = true;
+          cockpitVideo.play().catch(e => console.error("Final Cockpit Video Crash:", e));
+        });
+      }
     }
   });
 }
@@ -282,6 +296,7 @@ let mapClickCount = 0;
 
 const displayElement = document.getElementById('timer-display');
 const startBtn = document.getElementById('start-btn');
+const skipBtn = document.getElementById('skip-btn'); // 🟢 スキップボタン取得
 const resetBtn = document.getElementById('reset-btn');
 const modeSelect = document.getElementById('race-mode');
 const bgSelector = document.getElementById('bg-selector'); 
@@ -482,7 +497,7 @@ function updateProgressMeter(progress) {
   });
 }
 
-// 🟢 TIMER WORKER INTERFACE (物理的同期回路に修正済み)
+// 🟢 TIMER WORKER INTERFACE (物理的同期回路)
 timerWorker.onmessage = function(e) {
   if (e.data === 'TICK' && isRunning) {
     const now = Date.now();
@@ -544,7 +559,7 @@ timerWorker.onmessage = function(e) {
             pomoIndicator.innerText = `[[ PIT_STOP ${currentPomoCycle}: RECHARGING ]]`;
             pomoIndicator.style.color = "var(--success-green)";
           }
-          pushLog(`>>> PIT-STOP TRIGGERED (STINT ${currentPomoCycle} END): ENTERING BOX. <<<`, "system");
+          pushLog(`>>> dashed TRIGGERED (STINT ${currentPomoCycle} END): ENTERING BOX. <<<`, "system");
           triggerRadioSound(); 
           manageBgmPlayback(); 
           addXP(15);
@@ -559,18 +574,7 @@ timerWorker.onmessage = function(e) {
         updateProgressMeter(0);
 
         if (timeLeft <= 0) {
-          pomoState = "WORK";
-          currentPomoCycle++;
-          timeLeft = pomoWorkDuration;
-          if (mapService) mapService.resetCheckpoints(); 
-          lastRegisteredVirtualLap = 1; 
-          if(pomoIndicator) {
-            pomoIndicator.innerText = `[[ STINT ${currentPomoCycle}: STIMULUS_RUN ]]`;
-            pomoIndicator.style.color = "var(--accent-magenta)";
-          }
-          pushLog(`>>> GREEN LIGHT (STINT ${currentPomoCycle}): BOX-OUT! ATTACK THE TRACK! <<<`, "success");
-          triggerRadioSound(); 
-          manageBgmPlayback(); 
+          triggerBoxOut(); // 次のセクターへの脱出処理を関数化
         }
         updateDisplay(timeLeft);
       }
@@ -578,6 +582,22 @@ timerWorker.onmessage = function(e) {
     updateLiveTelemetry();
   }
 };
+
+// 🟢 PIT_STOP脱出（通常終了・スキップ共通マッピング）
+function triggerBoxOut() {
+  pomoState = "WORK";
+  currentPomoCycle++;
+  timeLeft = pomoWorkDuration;
+  if (mapService) mapService.resetCheckpoints(); 
+  lastRegisteredVirtualLap = 1; 
+  if(pomoIndicator) {
+    pomoIndicator.innerText = `[[ STINT ${currentPomoCycle}: STIMULUS_RUN ]]`;
+    pomoIndicator.style.color = "var(--accent-neon-pink)";
+  }
+  pushLog(`>>> GREEN LIGHT (STINT ${currentPomoCycle}): BOX-OUT! ATTACK THE TRACK! <<<`, "success");
+  triggerRadioSound(); 
+  manageBgmPlayback();
+}
 
 async function finishSession(logMsg, earnedXP = 40, raceStatus = "FINISHED") {
   timerWorker.postMessage('STOP');
@@ -662,7 +682,7 @@ function updateTotalRemainDisplay(ms) {
   if(totalRemainDisplay) totalRemainDisplay.innerText = `TOTAL REMAIN: ${h}:${m}:${s}`;
 }
 
-// 🟢 📡 オンボード・コアテレメトリー計算モジュール（完全同期・真の時速演算回路）
+// 🟢 TELEMETRY HUD MANAGEMENT
 function updateLiveTelemetry() {
   const statusEl = document.getElementById('hud-status');
   
@@ -704,7 +724,8 @@ function updateLiveTelemetry() {
   safeSetText('ers-val', `${Math.floor(ersPercent)}%`);
   const ersBar = document.getElementById('ers-bar');
   if(ersBar) {
-    ersBar.style.width = `${ersPercent}%`;
+    bytesWidth = `${ersPercent}%`;
+    ersBar.style.width = bytesWidth;
     ersBar.style.background = ersPercent < 20 ? "var(--accent-neon-pink)" : "var(--accent-neon-cyan)";
   }
 
@@ -716,7 +737,18 @@ function updateLiveTelemetry() {
     tyreBar.style.background = tyreTemp >= 90.0 ? "var(--accent-neon-pink)" : "var(--success-green)";
   }
 
-  // ▼ ここからがマップ・時速・距離の完全同期回路だ！
+  // 🟢 累計作業時間（TOTAL WORK DONE）の表示更新
+  safeSetText('total-work-accumulated-display', formatMsToTimeStr(totalWorkTime));
+
+  // 🟢 PIT SKIP ボタンの表示・非表示の動的制御
+  if (skipBtn) {
+    if (isRunning && currentMode === "POMODORO" && pomoState === "REST") {
+      skipBtn.style.display = "inline-block"; 
+    } else {
+      skipBtn.style.display = "none"; 
+    }
+  }
+
   const speedEl = document.getElementById('tel-speed');
   const gearEl = document.getElementById('tel-gear');
   const dstEl = document.getElementById('tel-dst');
@@ -725,7 +757,6 @@ function updateLiveTelemetry() {
     let progress = 0;
     let currentWorkMins = 30;
 
-    // タイマーの進行度（0.0〜1.0）と、設定時間（分）を取得
     if (currentMode === "POMODORO") {
       progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
       currentWorkMins = totalWorkExpected ? (totalWorkExpected / 1000 / 60) : 150;
@@ -734,43 +765,36 @@ function updateLiveTelemetry() {
       currentWorkMins = pomoWorkDuration ? (pomoWorkDuration / 1000 / 60) : 30;
     } else {
       progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
-      currentWorkMins = TIME_PER_LAP / 1000 / 60; // 30固定
+      currentWorkMins = TIME_PER_LAP / 1000 / 60; 
     }
 
     const realRouteDist = mapService.totalDistanceKm || 0;
 
-    // 🛑 停止時 / 待機時の処理
     if (!isRunning) {
       speedEl.innerText = "0";
       gearEl.innerText = "N";
       gearEl.style.color = "var(--highlight-yellow)";
       dstEl.innerText = `${realRouteDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
     } else if (currentMode === "POMODORO" && pomoState === "REST") {
-      // ピットストップ中（休憩）
       speedEl.innerText = "0";
       gearEl.innerText = "N";
       gearEl.style.color = "var(--highlight-yellow)";
       const remainDist = Math.max(0, realRouteDist * (1 - progress));
       dstEl.innerText = `${remainDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
     } else {
-      // 🟢 アクティブ走行時 (タイマー進行に合わせた距離と時速の逆算)
       const remainDist = Math.max(0, realRouteDist * (1 - progress));
       dstEl.innerText = `${remainDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
 
-      // 🏎️ 真の時速計算: 距離(km) ÷ 設定時間(hour)
       const currentWorkHours = currentWorkMins / 60;
       const trueSpeed = currentWorkHours > 0 ? (realRouteDist / currentWorkHours) : 0;
 
-      // 速度感演出のための微小ジッター（時速20km以上出ている時のみ追加）
       let jitter = 0;
       if (trueSpeed > 20) {
         jitter = Math.floor(Math.sin(Date.now() / 150) * 2);
       }
       const currentSpeed = Math.floor(trueSpeed) + jitter;
-
       speedEl.innerText = currentSpeed;
 
-      // 速度に応じたギアチェンジ
       if (currentSpeed > 250) { gearEl.innerText = "8"; gearEl.style.color = "var(--accent-neon-pink)"; }
       else if (currentSpeed > 150) { gearEl.innerText = "7"; gearEl.style.color = "var(--accent-neon-pink)"; }
       else if (currentSpeed > 80) { gearEl.innerText = "6"; gearEl.style.color = "var(--accent-neon-cyan)"; }
@@ -778,12 +802,10 @@ function updateLiveTelemetry() {
       else if (currentSpeed > 10) { gearEl.innerText = "2"; gearEl.style.color = "var(--success-green)"; }
       else { gearEl.innerText = "1"; gearEl.style.color = "var(--success-green)"; }
 
-      // 📍 マップ位置の完全同期（タイマーの進捗＝現在地）
       mapService.updatePosition(progress, (checkpointName) => {
         pushLog(`>> TACTICAL_GPS: PASSED [${checkpointName}]`, "system");
       });
 
-      // 耐久モード時の周回処理（ENDURANCEのみループ）
       if (currentMode === "ENDURANCE") {
         const currentLapCount = Math.floor(totalWorkTime / TIME_PER_LAP) + 1;
         if (currentLapCount > lastRegisteredVirtualLap) {
@@ -990,6 +1012,19 @@ if(startBtn) {
     }
     updateLiveTelemetry();
     manageBgmPlayback(); 
+  });
+}
+
+// 🟢 PIT SKIP ボタン作動時のリスナー回路設定
+if(skipBtn) {
+  skipBtn.addEventListener('click', () => {
+    initAudioContext();
+    playRadioChirpFailsafe();
+    if (isRunning && currentMode === "POMODORO" && pomoState === "REST") {
+      pushLog("[TEAM RADIO] GP: \"Copy that, Hiro. Skipping PIT STOP. Box-out immediately!\"", "radio-gp");
+      triggerBoxOut(); // 休憩をブチ切って即時出撃
+      updateLiveTelemetry();
+    }
   });
 }
 

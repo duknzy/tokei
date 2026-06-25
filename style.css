@@ -207,7 +207,7 @@ body.void-black {
   flex-shrink: 0;
 }
 
-/* 🟢 F1 OFFICIAL STYLE LIVE TELEMETRY HUD DESIGN (右パネル専用にリマウント！) */
+/* 🟢 F1 OFFICIAL STYLE LIVE TELEMETRY HUD DESIGN */
 .f1-telemetry-hud {
   background: rgba(6, 2, 15, 0.6);
   border: 1px solid var(--terminal-dim);
@@ -219,7 +219,7 @@ body.void-black {
   flex-direction: column;
   gap: 3px;
   width: 100%;
-  flex-shrink: 0; /* ログが増えても潰れないようにロック */
+  flex-shrink: 0; 
   backdrop-filter: blur(4px);
 }
 .tel-row {
@@ -246,6 +246,13 @@ body.void-black {
   font-weight: bold;
 }
 
+/* スキップボタン専用エフェクト */
+#skip-btn:hover {
+  background: var(--accent-neon-pink) !important;
+  color: #000 !important;
+  box-shadow: 0 0 15px var(--accent-neon-pink) !important;
+}
+
 /* 🔴 LIVE GPS TELEMETRY MARKER WITH RADIAL PULSE */
 .cyber-marker { background: #ffffff; border: 2px solid var(--accent-neon-cyan); border-radius: 50%; box-shadow: 0 0 12px var(--accent-neon-cyan); }
 .cyber-marker::after { content: ""; position: absolute; top: -2px; left: -2px; width: 12px; height: 12px; border: 2px solid var(--accent-neon-cyan); border-radius: 50%; box-shadow: 0 0 8px var(--accent-neon-cyan); animation: gps-pulse-wave 1.2s infinite ease-out; pointer-events: none; }
@@ -267,160 +274,15 @@ body.void-black {
 button { background: transparent; border: 1px solid var(--accent-neon-cyan); color: var(--accent-neon-cyan); padding: 10px 24px; font-family: inherit; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; transition: all 0.15s ease; letter-spacing: 2px; }
 button:hover { background: var(--accent-neon-cyan); color: var(--bg-void); box-shadow: 0 0 15px var(--accent-neon-cyan); }
 
-/* 🏆 FIA OFFICIAL CERTIFICATE MODAL */
-.modal-overlay {
-  position: absolute;
-  top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(6, 2, 15, 0.88);
-  z-index: 9999;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease;
-}
-.modal-overlay.active { opacity: 1; pointer-events: auto; }
-
-.certificate-frame {
-  border: 6px double var(--accent-neon-purple) !important;
-  box-shadow: 0 0 50px rgba(148, 0, 211, 0.4), inset 0 0 30px rgba(148, 0, 211, 0.2);
-  width: 900px;
-  height: 640px;
-  background: radial-gradient(circle at 15% 20%, rgba(148, 0, 211, 0.4) 0%, transparent 45%),
-              linear-gradient(rgba(6, 2, 15, 0.70), rgba(6, 2, 15, 0.70)) !important;
-  padding: 40px !important;
-  border-radius: 4px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  box-sizing: border-box;
-}
-
-.cert-header {
-  font-size: 1.1rem;
-  color: var(--highlight-yellow);
-  letter-spacing: 5px;
-  border-bottom: 2px solid var(--accent-neon-purple);
-  padding-bottom: 8px;
-  width: 100%;
-}
-
-.cert-operator-label { color: #fff; font-size: 1rem; letter-spacing: 3px; margin-top: 25px; }
-
-.cert-main {
-  font-size: 4rem !important;
-  color: var(--accent-neon-cyan) !important;
-  margin: 15px 0 !important;
-  font-weight: 700;
-  letter-spacing: 3px;
-  text-shadow: 0 0 25px var(--accent-neon-purple), 0 0 5px #fff;
-}
-
-.cert-reason { font-size: 1.3rem; color: #daffde; margin-bottom: 25px; letter-spacing: 1.5px; }
-.cert-track-name { font-size: 2.2rem; color: var(--highlight-yellow); letter-spacing: 3px; margin: 0 0 25px 0; text-shadow: 0 0 15px rgba(252, 238, 10, 0.4); }
-
-.cert-arcade-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px 30px;
-  width: 100%;
-  margin: 25px 0;
-  background: rgba(6, 2, 15, 0.45);
-  padding: 25px 40px;
-  border: 1px solid var(--accent-neon-purple);
-  border-radius: 4px;
-}
-
-.cert-arcade-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 1.1rem;
-  border: 1px solid var(--terminal-dim); 
-  border-radius: 2px;
-  padding: 10px;
-  color: #daffde;
-}
-.cert-arcade-item .stats-label { color: var(--accent-neon-cyan); margin-right: 15px; }
-.cert-earned-block { grid-column: span 2; border: none; justify-content: center; gap: 15px; font-size: 1.3rem; margin-top: 5px; }
-
-#db-status-label { font-size: 0.85rem; color: var(--terminal-dim-text); margin-bottom: 20px; letter-spacing: 1px; }
-
-#modal-close-btn {
-  width: 50%; border: 1px solid var(--highlight-yellow); color: var(--highlight-yellow); padding: 12px 24px;
-  background: transparent; font-size: 1.1rem; cursor: pointer; transition: all 0.2s ease; letter-spacing: 3px; text-transform: uppercase;
-}
-#modal-close-btn:hover { background: var(--highlight-yellow); color: #000; box-shadow: 0 0 25px var(--highlight-yellow); font-weight: bold; }
-
-/* 📻 TEAM RADIO STYLE */
-.log-entry.radio-gp {
-  color: var(--highlight-yellow);
-  font-weight: bold;
-  text-shadow: 0 0 8px rgba(252, 238, 10, 0.3);
-}
-.log-entry.radio-telemetry {
-  color: var(--accent-neon-cyan);
-  padding-left: 10px;
-}
-
-/* 🔓 ALARM FLASH EFFECTS */
-.scrollable-panel {
-  overflow-y: auto !important;
-  scrollbar-width: none;
-}
-.scrollable-panel::-webkit-scrollbar {
-  display: none;
-}
-
-@keyframes pit-in-flash-anim {
-  0% { background-color: var(--accent-neon-pink); opacity: 0.6; }
-  50% { background-color: var(--bg-void); opacity: 1; }
-  100% { background-color: var(--bg-void); }
-}
-@keyframes box-out-flash-anim {
-  0% { background-color: var(--success-green); opacity: 0.6; }
-  50% { background-color: var(--bg-void); opacity: 1; }
-  100% { background-color: var(--bg-void); }
-}
-@keyframes race-complete-flash-anim {
-  0%, 100% { background-color: var(--bg-void); }
-  25% { background-color: var(--highlight-yellow); }
-  75% { background-color: var(--accent-neon-cyan); }
-}
-
+/* 🏆 LAPS OVERRIDES */
 body.pit-in-alarm { animation: pit-in-flash-anim 0.6s ease-out 2; }
 body.box-out-alarm { animation: box-out-flash-anim 0.5s ease-out 2; }
 body.race-complete-alarm { animation: race-complete-flash-anim 0.3s ease infinite; }
 
-/* Leaflet retrowave overrides */
-.leaflet-control-attribution { background: rgba(6, 2, 15, 0.7) !important; color: rgba(0, 255, 255, 0.4) !important; font-size: 0.75rem !important; }
-.leaflet-bar { border: 1px solid var(--accent-neon-cyan) !important; box-shadow: 0 0 10px rgba(0,255,255,0.3) !important; }
-.leaflet-bar a { background-color: #06020f !important; color: var(--accent-neon-cyan) !important; border-bottom: 1px solid var(--terminal-dim) !important; }
-
 /* DYNAMIC AIR AERO: RESPONSIVE MEDIA QUERY CIRCUIT */
 @media (max-width: 1100px) {
-  body {
-    overflow-y: auto; 
-    height: auto;
-    padding: 20px 0;
-  }
-  .matrix-layout {
-    grid-template-columns: 1fr; 
-    height: auto;
-    max-height: none;
-    gap: 15px;
-  }
-  .panel {
-    height: auto;
-    max-height: none;
-  }
-  #map {
-    height: 350px; 
-    margin-top: 15px;
-  }
+  body { overflow-y: auto; height: auto; padding: 20px 0; }
+  .matrix-layout { grid-template-columns: 1fr; height: auto; max-height: none; gap: 15px; }
+  .panel { height: auto; max-height: none; }
+  #map { height: 350px; margin-top: 15px; }
 }

@@ -136,6 +136,7 @@
       
       <div class="btn-group">
         <button id="start-btn">ENGAGE</button>
+        <button id="skip-btn" style="display: none; border-color: var(--accent-neon-pink); color: var(--accent-neon-pink);">PIT SKIP ➔</button>
         <button id="pip-btn" style="border-color: var(--highlight-yellow); color: var(--highlight-yellow);">HUD MODE</button>
         <button id="reset-btn">ABORT DNF</button>
       </div>
@@ -150,6 +151,11 @@
       </div>
       <div class="xp-bar-container">
         <div class="xp-bar-fill" id="xp-fill"></div>
+      </div>
+
+      <div class="total-work-live-box" style="margin-top: 10px; padding: 6px 10px; background: rgba(0, 255, 255, 0.05); border: 1px solid var(--terminal-dim); display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--terminal-dim-text); letter-spacing: 1px;">🏁 TOTAL WORK DONE</span>
+        <span id="total-work-accumulated-display" style="font-size: 1.1rem; font-weight: bold; color: var(--success-green); text-shadow: 0 0 8px var(--success-green);">00m 00s</span>
       </div>
 
       <div class="mini-telemetry-zone" style="margin-top: 15px;">
