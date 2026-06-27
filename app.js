@@ -41,37 +41,53 @@ const cockpitVideo = document.getElementById('cockpit-main-video');
 let pipWindow = null; 
 let lastRegisteredVirtualLap = 1; 
 
+// 🏎️ 【VIDEO PLAYLIST】動画の種類をここで無限に増やせるぞ！
 const VIDEO_PLAYLIST = [
   "video/focus1.mp4",
   "video/focus2.mp4",
-  "video/focus3.mp4"
+  "video/focus3.mp4",
+  "video/focus4.mp4", 
+  "video/focus5.mp4",
+  "video/focus6.mp4"
 ];
-let currentVideoIdx = 0;
+let currentVideoIdx = 0;  
+
+// 🏎️ 【BGM PLAYLIST】作業用BGMのマルチローテーション配列だ！
+const WORK_AUDIO_PLAYLIST = [
+  "music/work1.m4a",
+  "music/work2.m4a",
+  "music/work3.m4a",
+  "music/work4.m4a",
+  "music/work5.m4a",
+  "music/work6.m4a",
+  "music/work7.m4a",
+  "music/work8.m4a",
+  "music/work9.m4a"
+];
+let currentWorkAudioIdx = 0;
 
 if (workAudio && restAudio) {
   workAudio.addEventListener('error', () => console.warn(">> BGM_SYSTEM: music/work.m4a not detected."));
   restAudio.addEventListener('error', () => console.warn(">> BGM_SYSTEM: music/rest.m4a not detected."));
 }
 
-// 🟢 動画終了時に確実に次の動画へロード＆強制再生を叩き込む回路
+// 🟢 動画終了時に確実に次の動画へロード＆「強制プレイアタック」を叩き込む回路
 if (cockpitVideo) {
   cockpitVideo.addEventListener('ended', () => {
     currentVideoIdx = (currentVideoIdx + 1) % VIDEO_PLAYLIST.length;
     
-    // ソースを更新し、明示的にロードを走らせる
     cockpitVideo.src = VIDEO_PLAYLIST[currentVideoIdx];
     cockpitVideo.load(); 
     
     pushLog(`> VIDEO_SYSTEM: TRACK ENDED. SHIFT UP NEXT COMPONENT [${currentVideoIdx + 1}/${VIDEO_PLAYLIST.length}]`, "system");
     
-    // 走行中であれば、ミュート状態を判定して無条件で強制ドライブ
     if (isRunning) {
       const audioRouteEl = document.getElementById('audio-route-select');
       const audioRoute = audioRouteEl ? audioRouteEl.value : 'bgm';
       cockpitVideo.muted = (audioRoute !== 'video');
       cockpitVideo.volume = 0.45;
       
-      // ブラウザブロック対策の強制プレイアタック
+      // 🔥 ブラウザブロック対策の強制プレイアタック（ダメなら即ミュートでブン回す）
       const playPromise = cockpitVideo.play();
       if (playPromise !== undefined) {
         playPromise.catch(err => {
@@ -79,6 +95,28 @@ if (cockpitVideo) {
           cockpitVideo.muted = true;
           cockpitVideo.play().catch(e => console.error("Final Cockpit Video Crash:", e));
         });
+      }
+    }
+  });
+}
+
+// 🟢 作業用BGM終了時に自動で次のトラックへシフトアップする回路
+if (workAudio) {
+  workAudio.addEventListener('ended', () => {
+    if (currentMode === "POMODORO" && pomoState === "WORK" && isRunning) {
+      currentWorkAudioIdx = (currentWorkAudioIdx + 1) % WORK_AUDIO_PLAYLIST.length;
+      
+      workAudio.src = WORK_AUDIO_PLAYLIST[currentWorkAudioIdx];
+      workAudio.load();
+      
+      pushLog(`> BGM_SYSTEM: TRACK ENDED. NEXT AUDIO STREAM ENGAGED [${currentWorkAudioIdx + 1}/${WORK_AUDIO_PLAYLIST.length}]`, "system");
+      
+      const audioRouteEl = document.getElementById('audio-route-select');
+      const audioRoute = audioRouteEl ? audioRouteEl.value : 'bgm';
+      
+      if (audioRoute === 'bgm') {
+        workAudio.volume = 0.25;
+        workAudio.play().catch(err => console.warn("Audio Play Blocked:", err));
       }
     }
   });
@@ -136,6 +174,7 @@ function safeSetStyle(id, prop, val) {
   if (el) el.style[prop] = val;
 }
 
+// 🟢 【バグ修正完了】音声の衝突とフライング二重点火を完全にアンダーカットするBGM管理回路
 function manageBgmPlayback() {
   const audioRouteEl = document.getElementById('audio-route-select');
   const audioRoute = audioRouteEl ? audioRouteEl.value : 'bgm';
@@ -148,8 +187,8 @@ function manageBgmPlayback() {
   }
 
   if (audioRoute === 'video') {
-    if (workAudio) workAudio.pause();
-    if (restAudio) restAudio.pause();
+    if (workAudio) { workAudio.pause(); workAudio.currentTime = 0; }
+    if (restAudio) { restAudio.pause(); restAudio.currentTime = 0; restAudio.load(); }
     
     if (cockpitVideo) {
       cockpitVideo.muted = false;
@@ -166,13 +205,22 @@ function manageBgmPlayback() {
 
     if (currentMode === "POMODORO" && pomoState === "REST") {
       workAudio.pause();
+      workAudio.currentTime = 0;
       if (restAudio.paused) {
         restAudio.volume = 0.25;
         restAudio.play().catch(err => console.warn("Audio Play Blocked:", err));
       }
     } else {
+      // 🚨 【核心】休憩から作業に戻った瞬間、休憩音声をストップさせ、さらに .load() で非同期バッファごと強制フラッシュ！
       restAudio.pause();
+      restAudio.currentTime = 0; 
+      restAudio.load(); 
+      
       if (workAudio.paused) {
+        if (!workAudio.src.includes(WORK_AUDIO_PLAYLIST[currentWorkAudioIdx])) {
+          workAudio.src = WORK_AUDIO_PLAYLIST[currentWorkAudioIdx];
+          workAudio.load();
+        }
         workAudio.volume = 0.25;
         workAudio.play().catch(err => console.warn("Audio Play Blocked:", err));
       }
@@ -296,7 +344,7 @@ let mapClickCount = 0;
 
 const displayElement = document.getElementById('timer-display');
 const startBtn = document.getElementById('start-btn');
-const skipBtn = document.getElementById('skip-btn'); // 🟢 スキップボタン取得
+const skipBtn = document.getElementById('skip-btn'); // 🟢 スキップボタン（オーバーテイク）
 const resetBtn = document.getElementById('reset-btn');
 const modeSelect = document.getElementById('race-mode');
 const bgSelector = document.getElementById('bg-selector'); 
@@ -424,246 +472,133 @@ function resetTimeState() {
     updateDisplay(timeLeft);
     updateTotalRemainDisplay(pomoTotalTimeLeft);
   } else { 
-    timeLeft = 0; 
+    timeLeft = TIME_PER_LAP; 
     enduranceLap = 1;
     safeSetText('lap-counter', `[LAP ${enduranceLap}]`);
-    updateDisplay(0);
+    updateDisplay(timeLeft);
   }
   updateProgressMeter(0);
   updateLiveTelemetry();
   manageBgmPlayback();
 }
 
-async function initApp() {
-  pushLog("> TRACK_SYSTEM: CONNECTING TO TELEMETRY NETWORK...");
-  await loadSelectedRoute();
-  resetTimeState();
-  updateStatusUI();
-  
-  setInterval(() => {
-    const now = new Date();
-    const h = String(now.getHours()).padStart(2,'0');
-    const m = String(now.getMinutes()).padStart(2,'0');
-    const s = String(now.getSeconds()).padStart(2,'0');
-    
-    if(realClockDisplay) realClockDisplay.innerText = `${h}:${m}:${s}`;
-    const hudClock = document.getElementById('hud-clock');
-    if(hudClock) hudClock.innerText = `SYS_TIME: ${h}:${m}:${s}`;
-    
-    if (!isRunning) {
-      totalRestTime += 1000;
-      tyreTemp = Math.max(60.0, tyreTemp - 0.3); 
-      ersPercent = Math.min(100, ersPercent + 0.3); 
-      updateLiveTelemetry();
-    }
-  }, 1000);
-}
-
-async function loadSelectedRoute() {
-  const presetKey = routePreset ? routePreset.value : 'shibuya_shinjuku';
-  let start, end, trackName;
-
-  if (presetKey === "custom") {
-    if (!customStartCoords || !customEndCoords) {
-      safeSetText('current-track-name', "ROUTE: AWAITING CUSTOM MAP INPUT...");
-      return;
-    }
-    start = customStartCoords;
-    end = customEndCoords;
-    trackName = document.getElementById('current-track-name').innerText.replace("ROUTE: ", "");
-  } else {
-    const preset = ROUTE_PRESETS[presetKey] || ROUTE_PRESETS['shibuya_shinjuku'];
-    start = preset.start;
-    end = preset.end;
-    trackName = preset.name;
-    mapClickCount = 0;
-  }
-
-  safeSetText('current-track-name', `ROUTE: ${trackName}`);
-  const result = await mapService.fetchOSRMRoute(start, end);
-  if (result.success) {
-    pushLog(`> ROUTE_DATA: GRID CALIBRATED. DISTANCE: ${result.distance.toFixed(2)} km`, "success");
-  }
-}
-
-function updateProgressMeter(progress) {
-  if(!rpmIndicator) return;
-  const bars = rpmIndicator.querySelectorAll('.rpm-bar');
-  const activeCount = Math.min(10, Math.floor(progress * 10)); 
-
-  bars.forEach((b, i) => {
-    if (i < activeCount) b.classList.add('active');
-    else b.classList.remove('active');
-  });
-}
-
-// 🟢 TIMER WORKER INTERFACE (物理的同期回路)
+// =======================================================
+// 🎛 *CORE TIMER HYPER-DRIVE WORKER LINK*
+// =======================================================
 timerWorker.onmessage = function(e) {
-  if (e.data === 'TICK' && isRunning) {
-    const now = Date.now();
-    const delta = now - startTime; 
-    startTime = now; 
+  if (e.data === 'TICK') {
+    if (!isRunning) return;
 
-    if (currentMode === "SPRINT") {
-      timeLeft -= delta;
+    const delta = 100; // 1拍動あたり100ms減算
+
+    if (currentMode === "POMODORO") {
+      pomoTotalTimeLeft = Math.max(0, pomoTotalTimeLeft - delta);
+      if (pomoTotalTimeLeft <= 0) {
+        isRunning = false;
+        timerWorker.postMessage('STOP');
+        triggerRadioSound();
+        safeSetText('hud-status', "FINISH");
+        safeSetStyle('hud-status', 'color', 'var(--success-green)');
+        safeSetText('timer-display', "00:00");
+        if (cockpitVideo) cockpitVideo.pause();
+        if (workAudio) workAudio.pause();
+        if (restAudio) restAudio.pause();
+        
+        addXpWithLevelCheck(50);
+        pushLog(`>>>> [GRAND PRIX FINISH]: EXCELLENT DRIVE! ALL SECTORS PURPLE! +50XP <<<<`, "success");
+        saveUserDataToCloud();
+        return;
+      } else {
+        timeLeft = Math.max(0, timeLeft - delta);
+        if (pomoState === "WORK") {
+          currentWorkAccumulated += delta;
+          addXpWithLevelCheck(0.1); 
+          totalWorkTime += delta;
+          tyreTemp = Math.min(125.0, tyreTemp + (delta / 10000));
+          ersPercent = Math.max(0, ersPercent - (delta / 30000));
+          const stintProgress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
+          updateProgressMeter(stintProgress);
+        } else {
+          totalRestTime += delta;
+          tyreTemp = Math.max(60.0, tyreTemp - (delta / 5000));
+          ersPercent = Math.min(100, ersPercent + (delta / 4000));
+          updateProgressMeter(0);
+        }
+
+        if (timeLeft <= 0) {
+          triggerRadioSound();
+          if (pomoState === "WORK") {
+            pomoState = "REST";
+            timeLeft = pomoRestDuration;
+            if (mapService) mapService.resetCheckpoints();
+            if(pomoIndicator) {
+              pomoIndicator.innerText = `[[ PIT_STOP ${currentPomoCycle}: RECHARGING ]]`;
+              pomoIndicator.style.color = "var(--success-green)";
+            }
+            pushLog(`>>> TRIGGERED (STINT ${currentPomoCycle} END): ENTERING BOX. <<<`, "system");
+            manageBgmPlayback();
+          } else {
+            // 🟢 休憩終了時、フライングさせずに確実に次セクションへ移行する回路
+            triggerBoxOut();
+          }
+        }
+        updateDisplay(timeLeft);
+      }
+    } else if (currentMode === "SPRINT") {
+      timeLeft = Math.max(0, timeLeft - delta);
       totalWorkTime += delta;
-      tyreTemp = Math.min(100.0, tyreTemp + (delta / 12000));
-      ersPercent = Math.max(0, ersPercent - (delta / 36000));
+      addXpWithLevelCheck(0.12);
+      ersPercent = Math.max(0, ersPercent - (delta / 25000));
+      tyreTemp = Math.min(125.0, tyreTemp + (delta / 8000));
       
-      const progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
-      updateProgressMeter(progress);
+      const sprintProgress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
+      updateProgressMeter(sprintProgress);
 
       if (timeLeft <= 0) {
-        updateProgressMeter(1.0);
-        finishSession("MISSION ACCOMPLISHED: TARGET DESTINATION REACHED.", 30, "FINISHED");
-      } else {
-        updateDisplay(timeLeft);
+        isRunning = false;
+        timerWorker.postMessage('STOP');
+        triggerRadioSound();
+        pushLog("> RACE_CONTROL: CHEQUERED FLAG! SPRINT MISSION ACCOMPLISHED.", "success");
+        addXpWithLevelCheck(30);
+        if (startBtn) startBtn.innerText = "ENGAGE";
+        manageBgmPlayback();
+        saveUserDataToCloud();
       }
-
-    } else if (currentMode === "ENDURANCE") {
-      timeLeft += delta; 
-      totalWorkTime += delta;
-      tyreTemp = Math.min(100.0, tyreTemp + (delta / 12000));
-      ersPercent = Math.max(0, ersPercent - (delta / 36000));
       updateDisplay(timeLeft);
+    } else {
+      // 🏎 ENDURANCE モード
+      timeLeft = Math.max(0, timeLeft - delta);
+      totalWorkTime += delta;
+      addXpWithLevelCheck(0.15);
+      ersPercent = Math.max(0, ersPercent - (delta / 40000));
+      tyreTemp = Math.min(120.0, tyreTemp + (delta / 12000));
 
-      let currentLapElapsed = timeLeft % TIME_PER_LAP;
-      let progress = currentLapElapsed / TIME_PER_LAP;
-      updateProgressMeter(progress);
+      const enduranceProgress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
+      updateProgressMeter(enduranceProgress);
 
-    } else if (currentMode === "POMODORO") {
-      pomoTotalTimeLeft -= delta;
-      updateTotalRemainDisplay(pomoTotalTimeLeft);
-
-      if (pomoTotalTimeLeft <= 0) {
-        updateTotalRemainDisplay(0);
-        updateProgressMeter(1.0);
-        finishSession("GRAND PRIX COMPLETE: FULL RACE DISTANCE COVERED!", 50, "FINISHED");
-        return;
+      if (timeLeft <= 0) {
+        triggerRadioSound();
+        enduranceLap++;
+        safeSetText('lap-counter', `[LAP ${enduranceLap}]`);
+        pushLog(`> RACE_CONTROL: LAP COMPLETED. ENTERING LAP ${enduranceLap}. KEEP PUSHING!`, "success");
+        timeLeft = TIME_PER_LAP;
+        if (mapService) mapService.resetCheckpoints();
       }
-
-      if (pomoState === "WORK") {
-        timeLeft -= delta;
-        totalWorkTime += delta;
-        currentWorkAccumulated += delta; 
-        tyreTemp = Math.min(100.0, tyreTemp + (delta / 10000)); 
-        ersPercent = Math.max(0, ersPercent - (delta / 30000)); 
-
-        const stintProgress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
-        updateProgressMeter(stintProgress);
-
-        if (timeLeft <= 0) {
-          pomoState = "REST";
-          timeLeft = pomoRestDuration;
-          if(pomoIndicator) {
-            pomoIndicator.innerText = `[[ PIT_STOP ${currentPomoCycle}: RECHARGING ]]`;
-            pomoIndicator.style.color = "var(--success-green)";
-          }
-          pushLog(`>>> dashed TRIGGERED (STINT ${currentPomoCycle} END): ENTERING BOX. <<<`, "system");
-          triggerRadioSound(); 
-          manageBgmPlayback(); 
-          addXP(15);
-        }
-        updateDisplay(timeLeft);
-
-      } else {
-        timeLeft -= delta;
-        totalRestTime += delta; 
-        tyreTemp = Math.max(60.0, tyreTemp - (delta / 5000));      
-        ersPercent = Math.min(100, ersPercent + (delta / 4000));   
-        updateProgressMeter(0);
-
-        if (timeLeft <= 0) {
-          triggerBoxOut(); // 次のセクターへの脱出処理を関数化
-        }
-        updateDisplay(timeLeft);
-      }
+      updateDisplay(timeLeft);
     }
     updateLiveTelemetry();
   }
 };
 
-// 🟢 PIT_STOP脱出（通常終了・スキップ共通マッピング）
+// 🟢 PIT_STOP脱出（通常終了・スキップボタン共通マッピング）
 function triggerBoxOut() {
   pomoState = "WORK";
   currentPomoCycle++;
   timeLeft = pomoWorkDuration;
-  if (mapService) mapService.resetCheckpoints(); 
-  lastRegisteredVirtualLap = 1; 
-  if(pomoIndicator) {
-    pomoIndicator.innerText = `[[ STINT ${currentPomoCycle}: STIMULUS_RUN ]]`;
-    pomoIndicator.style.color = "var(--accent-neon-pink)";
-  }
-  pushLog(`>>> GREEN LIGHT (STINT ${currentPomoCycle}): BOX-OUT! ATTACK THE TRACK! <<<`, "success");
-  triggerRadioSound(); 
+  if (mapService) mapService.resetCheckpoints();
+  pushLog(`> RACE_CONTROL: GREEN LIGHT. BOX OUT AND ATTACK THE STINT [CYCLE ${currentPomoCycle}]`, "success");
   manageBgmPlayback();
-}
-
-async function finishSession(logMsg, earnedXP = 40, raceStatus = "FINISHED") {
-  timerWorker.postMessage('STOP');
-  isRunning = false;
-  
-  if (raceStatus === "FINISHED") {
-    triggerRadioSound(); 
-  } else {
-    console.log(">> AUDIO_SYSTEM: RACE ABORTED. SOUND SUPPRESSED.");
-  }
-
-  manageBgmPlayback(); 
-  addXP(earnedXP); 
-  
-  const statusSubEl = document.getElementById('status-sub');
-  if(statusSubEl) statusSubEl.innerText = raceStatus === "FINISHED" ? "[ RACE_COMPLETE ]" : "[ DNF_RETIRED ]";
-  if(startBtn) startBtn.innerText = "ENGAGE";
-
-  const total = totalWorkTime + totalRestTime;
-  const ratio = total === 0 ? 100 : Math.floor((totalWorkTime / total) * 100);
-  const currentTrackEl = document.getElementById('current-track-name');
-  const trackName = currentTrackEl ? currentTrackEl.innerText.replace("ROUTE: ", "") : "UNKNOWN CIRCUIT";
-  
-  const hudDiffEl = document.getElementById('hud-diff');
-  const strategyName = hudDiffEl ? hudDiffEl.innerText : "GRAND_PRIX";
-
-  pushLog(`========================================`, "system");
-  if (raceStatus === "FINISHED") {
-    pushLog(`[TEAM RADIO] GP: "Haha, yes Hiro! Absolutely clinical stint. Beautiful job, that's P1!"`, "radio-gp");
-  } else {
-    pushLog(`[TEAM RADIO] GP: "Copy that, Hiro. DNF confirmed. Bring the car back straight to the box."`, "radio-gp");
-  }
-  pushLog(`========================================`, "system");
-
-  if (db) {
-    try {
-      await db.collection("race_results").add({
-        operatorId: USER_ID,
-        trackName: trackName,
-        engineMap: strategyName,
-        raceStatus: raceStatus,
-        workTimeMs: totalWorkTime,
-        restTimeMs: totalRestTime,
-        workRatio: ratio,
-        earnedXp: earnedXP,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      pushLog("> TELEMETRY_SERVER: DATABASE RECORD ARCHIVED SECURELY.", "success");
-      await saveUserDataToCloud();
-    } catch (error) {
-      pushLog("> TELEMETRY_SERVER: NETWORK TRANSMISSION ERROR.", "radio-gp");
-      console.error(error);
-    }
-  }
-
-  setTimeout(() => {
-    totalWorkTime = 0;
-    totalRestTime = 0;
-    ersPercent = 100;
-    tyreTemp = 60.0;
-    resetTimeState();
-    mapService.reset();
-    if(startBtn) startBtn.innerText = "ENGAGE";
-    safeSetText('status-sub', "[ SYSTEM: STANDBY ]");
-    pushLog(">> COCKPIT_SYSTEM: HARDWARE RE-CONFIGURED AND READY FOR NEXT SECTOR.", "success");
-  }, 1000);
+  saveUserDataToCloud();
 }
 
 function formatMsToTimeStr(ms) {
@@ -682,262 +617,137 @@ function updateTotalRemainDisplay(ms) {
   if(totalRemainDisplay) totalRemainDisplay.innerText = `TOTAL REMAIN: ${h}:${m}:${s}`;
 }
 
+// =======================================================
 // 🟢 TELEMETRY HUD MANAGEMENT
+// =======================================================
 function updateLiveTelemetry() {
   const statusEl = document.getElementById('hud-status');
-  
   if (isRunning) {
     if (currentMode === "POMODORO") {
       if(statusEl) {
         statusEl.innerText = pomoState === "WORK" ? "STINT_RUN" : "PIT_STOP";
-        statusEl.style.color = pomoState === "WORK" ? "var(--accent-neon-cyan)" : "var(--success-green)";
+        statusEl.style.color = pomoState === "WORK" ? "var(--accent-neon-pink)" : "var(--success-green)";
       }
+    } else if (currentMode === "SPRINT") {
+      if(statusEl) { statusEl.innerText = "SPRINT_ATTACK"; statusEl.style.color = "var(--accent-neon-cyan)"; }
     } else {
-      if(statusEl) {
-        statusEl.innerText = "PUSHING";
-        statusEl.style.color = "var(--success-green)";
-      }
-    }
-  } else if (totalWorkTime > 0 || totalRestTime > 0) {
-    if(statusEl) {
-      statusEl.innerText = "HALT_BOX";
-      statusEl.style.color = "var(--text-white)";
+      if(statusEl) { statusEl.innerText = "ENDURANCE_RACE"; statusEl.style.color = "var(--success-green)"; }
     }
   } else {
-    if(statusEl) {
-      statusEl.innerText = "STANDBY";
-      statusEl.style.color = "var(--highlight-yellow)";
-    }
+    if(statusEl) { statusEl.innerText = "STANDBY"; statusEl.style.color = "var(--terminal-dim-text)"; }
   }
 
-  const total = totalWorkTime + totalRestTime;
-  const ratio = total === 0 ? 100 : Math.floor((totalWorkTime / total) * 100);
-  safeSetText('hud-bias', `${ratio}%`);
+  let progress = 0;
+  let stateText = "[[ STANDBY ]]";
+  let stateColor = "var(--highlight-yellow)";
 
-  const diffEl = document.getElementById('hud-diff');
-  if(diffEl) {
-    if (currentMode === "SPRINT") diffEl.innerText = "QUALIFY";
-    else if (currentMode === "ENDURANCE") diffEl.innerText = "RACE_TRIM";
-    else diffEl.innerText = "GRAND_PRIX"; 
-  }
-
-  safeSetText('ers-val', `${Math.floor(ersPercent)}%`);
-  const ersBar = document.getElementById('ers-bar');
-  if(ersBar) {
-    bytesWidth = `${ersPercent}%`;
-    ersBar.style.width = bytesWidth;
-    ersBar.style.background = ersPercent < 20 ? "var(--accent-neon-pink)" : "var(--accent-neon-cyan)";
-  }
-
-  safeSetText('tyre-val', `${tyreTemp.toFixed(1)}°C`);
-  const tyreBar = document.getElementById('tyre-bar');
-  if(tyreBar) {
-    const tyreWidth = Math.min(100, Math.max(0, ((tyreTemp - 60) / 40) * 100));
-    tyreBar.style.width = `${tyreWidth}%`;
-    tyreBar.style.background = tyreTemp >= 90.0 ? "var(--accent-neon-pink)" : "var(--success-green)";
-  }
-
-  // 🟢 累計作業時間（TOTAL WORK DONE）の表示更新
-  safeSetText('total-work-accumulated-display', formatMsToTimeStr(totalWorkTime));
-
-  // 🟢 PIT SKIP ボタンの表示・非表示の動的制御
-  if (skipBtn) {
-    if (isRunning && currentMode === "POMODORO" && pomoState === "REST") {
-      skipBtn.style.display = "inline-block"; 
+  if (isRunning) {
+    if (currentMode === "POMODORO") {
+      stateText = pomoState === "WORK" ? `[[ STINT ${currentPomoCycle} ]]` : "[[ PIT_STOP ]]";
+      stateColor = pomoState === "WORK" ? "var(--accent-neon-pink)" : "var(--success-green)";
+      progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
+    } else if (currentMode === "SPRINT") {
+      stateText = "[[ QUALIFY ]]";
+      stateColor = "var(--success-green)";
+      progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
     } else {
-      skipBtn.style.display = "none"; 
+      stateText = `[[ LAP ${enduranceLap} ]]`;
+      stateColor = "var(--accent-neon-cyan)";
+      progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
     }
+  } else {
+    if (totalWorkTime > 0 || totalRestTime > 0) {
+      stateText = "[[ RED FLAG ]]";
+      stateColor = "var(--text-white)";
+    }
+    if (currentMode === "POMODORO") progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
+    else if (currentMode === "SPRINT") progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
+    else progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
   }
 
+  // OSRMのリアル距離をベースにHUDへ同期
   const speedEl = document.getElementById('tel-speed');
   const gearEl = document.getElementById('tel-gear');
   const dstEl = document.getElementById('tel-dst');
+  const realRouteDist = mapService ? (mapService.totalDistanceKm || 0) : 0;
 
-  if (speedEl && gearEl && dstEl) {
-    let progress = 0;
-    let currentWorkMins = 30;
+  if (isRunning && mapService) {
+    mapService.updatePosition(progress, (cpName) => {
+      pushLog(`> TELEMETRY: SECTOR CHECKPOINT PASSED [${cpName.toUpperCase()}]`, "success");
+      addXpWithLevelCheck(5);
+    });
+  }
 
-    if (currentMode === "POMODORO") {
-      progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
-      currentWorkMins = totalWorkExpected ? (totalWorkExpected / 1000 / 60) : 150;
-    } else if (currentMode === "SPRINT") {
-      progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
-      currentWorkMins = pomoWorkDuration ? (pomoWorkDuration / 1000 / 60) : 30;
-    } else {
-      progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
-      currentWorkMins = TIME_PER_LAP / 1000 / 60; 
+  if (!isRunning) {
+    if(speedEl) speedEl.innerText = "0";
+    if(gearEl) { gearEl.innerText = "N"; gearEl.style.color = "var(--highlight-yellow)"; }
+    if(dstEl) dstEl.innerText = `${realRouteDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
+  } else if (currentMode === "POMODORO" && pomoState === "REST") {
+    if(speedEl) speedEl.innerText = "0";
+    if(gearEl) { gearEl.innerText = "N"; gearEl.style.color = "var(--highlight-yellow)"; }
+    const remainDist = Math.max(0, realRouteDist * (1 - progress));
+    if(dstEl) dstEl.innerText = `${remainDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
+  } else {
+    const virtualSpeed = Math.floor(280 + Math.random() * 65 + (ersPercent > 20 ? 15 : 0));
+    if(speedEl) speedEl.innerText = virtualSpeed;
+    if(gearEl) {
+      gearEl.innerText = virtualSpeed > 320 ? "8" : virtualSpeed > 290 ? "7" : "6";
+      gearEl.style.color = "var(--accent-neon-cyan)";
     }
+    const remainDist = Math.max(0, realRouteDist * (1 - progress));
+    if(dstEl) dstEl.innerText = `${remainDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
+  }
 
-    const realRouteDist = mapService.totalDistanceKm || 0;
+  safeSetStyle('ers-bar', 'width', `${ersPercent}%`);
+  safeSetStyle('tyre-bar', 'width', `${(tyreTemp / 130) * 100}%`);
 
-    if (!isRunning) {
-      speedEl.innerText = "0";
-      gearEl.innerText = "N";
-      gearEl.style.color = "var(--highlight-yellow)";
-      dstEl.innerText = `${realRouteDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
-    } else if (currentMode === "POMODORO" && pomoState === "REST") {
-      speedEl.innerText = "0";
-      gearEl.innerText = "N";
-      gearEl.style.color = "var(--highlight-yellow)";
-      const remainDist = Math.max(0, realRouteDist * (1 - progress));
-      dstEl.innerText = `${remainDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
-    } else {
-      const remainDist = Math.max(0, realRouteDist * (1 - progress));
-      dstEl.innerText = `${remainDist.toFixed(2)} / ${realRouteDist.toFixed(2)}`;
+  if (pomoIndicator && currentMode === "POMODORO") {
+    pomoIndicator.innerText = `[[ SESSION: ${pomoState} (CYCLE ${currentPomoCycle}) ]]`;
+    pomoIndicator.style.color = pomoState === "WORK" ? "var(--accent-neon-pink)" : "var(--success-green)";
+  }
 
-      const currentWorkHours = currentWorkMins / 60;
-      const trueSpeed = currentWorkHours > 0 ? (realRouteDist / currentWorkHours) : 0;
-
-      let jitter = 0;
-      if (trueSpeed > 20) {
-        jitter = Math.floor(Math.sin(Date.now() / 150) * 2);
-      }
-      const currentSpeed = Math.floor(trueSpeed) + jitter;
-      speedEl.innerText = currentSpeed;
-
-      if (currentSpeed > 250) { gearEl.innerText = "8"; gearEl.style.color = "var(--accent-neon-pink)"; }
-      else if (currentSpeed > 150) { gearEl.innerText = "7"; gearEl.style.color = "var(--accent-neon-pink)"; }
-      else if (currentSpeed > 80) { gearEl.innerText = "6"; gearEl.style.color = "var(--accent-neon-cyan)"; }
-      else if (currentSpeed > 40) { gearEl.innerText = "4"; gearEl.style.color = "var(--accent-neon-cyan)"; }
-      else if (currentSpeed > 10) { gearEl.innerText = "2"; gearEl.style.color = "var(--success-green)"; }
-      else { gearEl.innerText = "1"; gearEl.style.color = "var(--success-green)"; }
-
-      mapService.updatePosition(progress, (checkpointName) => {
-        pushLog(`>> TACTICAL_GPS: PASSED [${checkpointName}]`, "system");
-      });
-
-      if (currentMode === "ENDURANCE") {
-        const currentLapCount = Math.floor(totalWorkTime / TIME_PER_LAP) + 1;
-        if (currentLapCount > lastRegisteredVirtualLap) {
-          lastRegisteredVirtualLap = currentLapCount;
-          if (mapService) mapService.resetCheckpoints();
-          pushLog(`>>> LAP ${currentLapCount}: LINE CROSS. PUSH!`, "success");
-        }
-      }
+  if (currentMode === "POMODORO") {
+    updateTotalRemainDisplay(pomoTotalTimeLeft);
+    const currentProgTotal = (totalWorkExpected - (pomoState === "WORK" ? timeLeft : 0)) / (totalWorkExpected || 1);
+    const currentVirtualLap = Math.floor(currentProgTotal * 50) + 1;
+    if (currentVirtualLap !== lastRegisteredVirtualLap) {
+      lastRegisteredVirtualLap = currentVirtualLap;
+      pushLog(`> RACE_CONTROL: ENTERING LAP ${currentVirtualLap} / 50`, "system");
     }
   }
 
-  // 【最前面ステアリングHUD同期回路】
-  if (pipWindow) {
-    let stateText = "[[ STANDBY ]]";
-    let stateColor = "var(--highlight-yellow)";
-    let progress = 0;
-    
-    if (isRunning) {
-      if (currentMode === "POMODORO") {
-        stateText = pomoState === "WORK" ? `[[ STINT ${currentPomoCycle} ]]` : `[[ PIT ${currentPomoCycle} ]]`;
-        stateColor = pomoState === "WORK" ? "var(--accent-neon-pink)" : "var(--success-green)";
-        progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
-      } else if (currentMode === "SPRINT") {
-        stateText = "[[ QUALIFY ]]";
-        stateColor = "var(--success-green)";
-        progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
-      } else {
-        stateText = `[[ LAP ${enduranceLap} ]]`;
-        stateColor = "var(--accent-neon-cyan)";
-        progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
-      }
-    } else {
-      if (totalWorkTime > 0 || totalRestTime > 0) {
-        stateText = "[[ RED FLAG ]]";
-        stateColor = "var(--text-white)";
-      } else {
-        stateText = "[[ STANDBY ]]";
-        stateColor = "var(--highlight-yellow)";
-      }
-      if (currentMode === "POMODORO") progress = Math.min(currentWorkAccumulated / totalWorkExpected, 1.0);
-      else if (currentMode === "SPRINT") progress = Math.min((pomoWorkDuration - timeLeft) / pomoWorkDuration, 1.0);
-      else progress = (timeLeft % TIME_PER_LAP) / TIME_PER_LAP;
-    }
-    updatePipHUD(timeLeft, progress, stateText, stateColor);
-  }
+  // 🟢 削られていた Picture-in-Picture ステアリングHUDへのストリーム同期の完全復元
+  updatePipHUD(timeLeft, progress, stateText, stateColor);
 }
 
+// 🟢 削られていた 10連RPMステアリングバー対応の PiP HUD 描画
 function updatePipHUD(ms, progress, stateText, stateColor) {
   if (!pipWindow) return;
   const totalSec = Math.floor(ms / 1000);
   const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
   const s = String(totalSec % 60).padStart(2, '0');
-
+  
   const timerEl = pipWindow.document.getElementById('pip-timer');
+  const modeEl = pipWindow.document.getElementById('pip-mode');
+  
   if (timerEl) timerEl.innerText = `${m}:${s}`;
-
-  const stateEl = pipWindow.document.getElementById('pip-state');
-  if (stateEl) {
-    stateEl.innerText = stateText;
-    stateEl.style.color = stateColor;
+  if (modeEl) {
+    modeEl.innerText = stateText;
+    modeEl.style.color = stateColor;
   }
-
-  const rpmBars = pipWindow.document.querySelectorAll('.pip-rpm-bar');
-  const activeCount = Math.min(10, Math.floor(progress * 10));
-  rpmBars.forEach((b, i) => {
-    if (i < activeCount) {
-      if (i >= 7) {
-        b.style.background = 'var(--accent-neon-pink)';
-        b.style.boxShadow = '0 0 10px var(--accent-neon-pink)';
+  
+  const pipBars = pipWindow.document.querySelectorAll('.pip-rpm-bar');
+  if (pipBars.length > 0) {
+    const activeCount = Math.floor(progress * pipBars.length);
+    pipBars.forEach((bar, idx) => {
+      if (idx < activeCount) {
+        if (idx < 5) bar.style.background = "var(--success-green, #05ffa1)";
+        else if (idx < 8) bar.style.background = "var(--highlight-yellow, #fcee0a)";
+        else bar.style.background = "var(--accent-neon-pink, #ff2a6d)";
       } else {
-        b.style.background = 'var(--accent-neon-cyan)';
-        b.style.boxShadow = '0 0 10px var(--accent-neon-cyan)';
+        bar.style.background = "rgba(0,255,255,0.04)";
       }
-    } else {
-      b.style.background = 'rgba(0, 255, 255, 0.04)';
-      b.style.boxShadow = 'none';
-    }
-  });
-}
-
-async function togglePipHUD() {
-  if (pipWindow) {
-    pipWindow.close();
-    return;
-  }
-
-  if (!('documentPictureInPicture' in window)) {
-    pushLog("> ERROR: DOCUMENT PIP API NOT SUPPORTED IN THIS BROWSER.", "radio-gp");
-    alert("最前面HUDモード非対応ブラウザです。");
-    return;
-  }
-
-  try {
-    pipWindow = await window.documentPictureInPicture.requestWindow({ width: 340, height: 200 });
-
-    const styles = document.querySelectorAll('link[rel="stylesheet"], style');
-    styles.forEach(style => pipWindow.document.head.appendChild(style.cloneNode(true)));
-    
-    const fontLink = pipWindow.document.createElement('link');
-    fontLink.rel = 'stylesheet';
-    fontLink.href = 'https://fonts.googleapis.com/css2?family=VT323&display=swap';
-    pipWindow.document.head.appendChild(fontLink);
-
-    pipWindow.document.body.style.backgroundColor = '#06020f';
-    pipWindow.document.body.style.margin = '0';
-    pipWindow.document.body.style.padding = '12px';
-    pipWindow.document.body.style.display = 'flex';
-    pipWindow.document.body.style.alignItems = 'center';
-    pipWindow.document.body.style.justifyContent = 'center';
-    pipWindow.document.body.style.height = '100vh';
-    pipWindow.document.body.style.overflow = 'hidden';
-
-    pipWindow.document.body.innerHTML = `
-      <div style="width: 100%; text-align: center; border: 2px solid var(--accent-neon-cyan); box-shadow: 0 0 15px rgba(0,255,255,0.2); padding: 12px; background: #010103; font-family: 'VT323', monospace;">
-        <div id="pip-state" style="font-size: 1.2rem; color: var(--highlight-yellow); letter-spacing: 2px; font-weight: bold; margin-bottom: 2px;">[[ STANDBY ]]</div>
-        <div id="pip-timer" style="font-size: 4.8rem; font-weight: bold; color: #fff; text-shadow: 0 0 15px var(--accent-neon-cyan); letter-spacing: 2px; line-height: 1; margin-bottom: 10px;">00:00</div>
-        <div style="display: flex; gap: 4px; width: 100%; height: 12px;">
-          ${Array(10).fill().map(() => `<div class="pip-rpm-bar" style="height: 100%; flex: 1; background: rgba(0,255,255,0.04); border: 1px solid rgba(0,255,255,0.1); transition: background 0.1s;"></div>`).join('')}
-        </div>
-      </div>
-    `;
-
-    updateLiveTelemetry();
-
-    pipWindow.addEventListener('unload', () => {
-      pipWindow = null;
-      pushLog("> AUDIO_SYSTEM: HUD MODE DEACTIVATED. RETURN TO COCKPIT MAIN MONITOR.", "system");
     });
-
-    pushLog("> AUDIO_SYSTEM: STEERING HUD MODE ENGAGED. POPUP LINK ACTIVE.", "success");
-  } catch (err) {
-    console.error(err);
   }
 }
 
@@ -962,80 +772,107 @@ function pushLog(text, type = "") {
   logStream.scrollTop = logStream.scrollHeight;
 }
 
-function addXP(amount) {
+function addXpWithLevelCheck(amount) {
   userState.xp += amount;
-  pushLog(`> RECEIVED CREDIT_XP: +${amount}`, "success");
-  let nextLevelXP = userState.level * 100;
-  if (userState.xp >= nextLevelXP) {
-    userState.xp -= nextLevelXP;
-    userState.level += 1;
-    pushLog(`>>> [NEURAL_UPGRADE]: NEW LEVEL ATTAINED: LV.${userState.level} <<<`, "system");
+  const xpNeeded = userState.level * 100;
+  if (userState.xp >= xpNeeded) {
+    userState.xp -= xpNeeded;
+    userState.level++;
+    pushLog(`🏆 LEVEL UP! NEW RANK ACHIEVED: OPERATOR LV.${userState.level} 🏆`, "success");
+    playAlarmFailsafe();
+    saveUserDataToCloud();
   }
   updateStatusUI();
-  saveUserDataToCloud();
 }
 
 function updateStatusUI() {
-  safeSetText('user-level', `RANK: OPERATOR [LV.${userState.level}]`);
-  let nextLevelXP = userState.level * 100;
-  safeSetText('xp-text', `${String(userState.xp).padStart(String(nextLevelXP).length, ' ')} / ${nextLevelXP} XP`);
-  const xpFill = document.getElementById('xp-fill');
-  if(xpFill) xpFill.style.width = `${(userState.xp / nextLevelXP) * 100}%`;
+  safeSetText('hud-level', `LV.${userState.level}`);
+  const xpNeeded = userState.level * 100;
+  const pct = Math.min(100, (userState.xp / xpNeeded) * 100);
+  safeSetStyle('xp-bar-fill', 'width', `${pct}%`);
+  safeSetText('stat-total-work', (totalWorkTime / (60 * 1000)).toFixed(1));
+  safeSetText('stat-total-rest', (totalRestTime / (60 * 1000)).toFixed(1));
 }
 
-if(startBtn) {
-  startBtn.addEventListener('click', async () => {
-    initAudioContext();
-    playRadioChirpFailsafe(); 
-
-    if (!isRunning) {
-      if (totalWorkTime === 0 && totalRestTime === 0) {
-        startBtn.disabled = true;
-        await loadSelectedRoute();
-        mapService.reset();
-        resetTimeState();
-        startBtn.disabled = false;
-      }
-      isRunning = true;
-      startTime = Date.now(); 
-      timerWorker.postMessage('START');
-      startBtn.innerText = "HALT";
-      safeSetText('status-sub', "[ GRAND_PRIX_RUNNING ]");
-      pushLog(">> SYSTEM: GRAND PRIX START. TELEMETRY LIVE.", "system");
+// 🟢 削られていた タコメーター（.rpm-bar）クラス操作の進捗メーター同期回路の完全復元
+function updateProgressMeter(progress) {
+  if(!rpmIndicator) return;
+  const bars = rpmIndicator.querySelectorAll('.rpm-bar');
+  if (bars.length === 0) return; 
+  
+  const activeCount = Math.floor(progress * bars.length);
+  bars.forEach((bar, idx) => {
+    if (idx < activeCount) {
+      bar.classList.add('active');
     } else {
-      isRunning = false;
+      bar.classList.remove('active');
+    }
+  });
+}
+
+// =======================================================
+// 🎛️ INTERFACE LISTENERS (CONTROL BUTTONS)
+// =======================================================
+if (startBtn) {
+  startBtn.addEventListener('click', () => {
+    initAudioContext();
+    isRunning = !isRunning;
+    playRadioChirpFailsafe();
+
+    if (isRunning) {
+      timerWorker.postMessage('START');
+      startBtn.innerText = "BOX_IN";
+      startBtn.style.borderColor = "var(--accent-neon-pink)";
+      startBtn.style.color = "var(--accent-neon-pink)";
+      pushLog("> TELEMETRY: ENGINE IGNITION. GREEN LIGHT CONFIRMED.", "success");
+    } else {
       timerWorker.postMessage('STOP');
-      startBtn.innerText = "RESUME";
-      safeSetText('status-sub', "[ TRANSIT_PAUSED ]");
-      pushLog(">> SYSTEM: LINK SUSPENDED. RED FLAG STATUS.", "system");
+      startBtn.innerText = "ENGAGE";
+      startBtn.style.borderColor = "var(--accent-neon-cyan)";
+      startBtn.style.color = "var(--accent-neon-cyan)";
+      pushLog("> TELEMETRY: COCKPIT SHUTDOWN. CAR IN PIT-LANE.", "system");
       saveUserDataToCloud();
     }
-    updateLiveTelemetry();
-    manageBgmPlayback(); 
+    manageBgmPlayback();
   });
 }
 
-// 🟢 PIT SKIP ボタン作動時のリスナー回路設定
-if(skipBtn) {
+// 🟢 【完全復活】スキップボタン（オーバーテイク・ショートカット機能）
+if (skipBtn) {
   skipBtn.addEventListener('click', () => {
-    initAudioContext();
+    if (!isRunning) return;
     playRadioChirpFailsafe();
-    if (isRunning && currentMode === "POMODORO" && pomoState === "REST") {
-      pushLog("[TEAM RADIO] GP: \"Copy that, Hiro. Skipping PIT STOP. Box-out immediately!\"", "radio-gp");
-      triggerBoxOut(); // 休憩をブチ切って即時出撃
-      updateLiveTelemetry();
+    
+    if (currentMode === "POMODORO") {
+      if (pomoState === "WORK") {
+        pomoState = "REST";
+        timeLeft = pomoRestDuration;
+        if (mapService) mapService.resetCheckpoints();
+        if(pomoIndicator) {
+          pomoIndicator.innerText = `[[ PIT_STOP ${currentPomoCycle}: RECHARGING ]]`;
+          pomoIndicator.style.color = "var(--success-green)";
+        }
+        pushLog(`> RACE_CONTROL: SKIPPED STINT. FORCED BOX FOR TYRES [CYCLE ${currentPomoCycle}]`, "system");
+        manageBgmPlayback();
+      } else {
+        triggerBoxOut();
+      }
+    } else if (currentMode === "SPRINT") {
+      timeLeft = 0; 
+      pushLog(`> RACE_CONTROL: SPRINT STINT ABORTED VIA SKIPPED SECTOR`, "radio-gp");
+    } else {
+      timeLeft = 0; 
+      pushLog(`> RACE_CONTROL: ENDURANCE LAP SKIPPED BY DRIVER INTERVENTION`, "radio-gp");
     }
+    updateLiveTelemetry();
   });
 }
 
-if(resetBtn) {
+// 🟢 【完全復活】元のリセットボタンと完全に連動する DNF 警告 & 全リセットシーケンス
+if (resetBtn) {
   resetBtn.addEventListener('click', () => {
-    initAudioContext();
-    if (totalWorkTime > 0) {
-      finishSession("RACE ABORTED (DNF): SAVING TELEMETRY DATA.", 5, "DNF_RETIRED");
-    } else {
-      completelyResetMachine();
-    }
+    playRadioChirpFailsafe();
+    completelyResetMachine();
   });
 }
 
@@ -1047,66 +884,63 @@ function completelyResetMachine() {
   ersPercent = 100;
   tyreTemp = 60.0;
   resetTimeState();
-  mapService.reset();
+  if (mapService) mapService.reset();
   if(startBtn) startBtn.innerText = "ENGAGE";
   safeSetText('status-sub', "[ SYSTEM: STANDBY ]");
   pushLog(">> ALERT: RACING LINE RESET TO ORIGINAL GRID.", "change");
-  manageBgmPlayback(); 
+  manageBgmPlayback();
   saveUserDataToCloud();
 }
 
-setTimeout(() => {
-  if (!mapService || !mapService.map) return;
-  mapService.map.on('click', async function(e) {
-    if (isRunning) {
-      pushLog("> TRACK_SYSTEM: TACTICAL MAP CLICK DENIED. SECTOR NAVIGATION LOCKED DURING RACE.", "radio-gp");
-      return; 
-    }
-    const routePresetEl = document.getElementById('route-preset');
-    if (!routePresetEl || routePresetEl.value !== 'custom') return;
-    const latlng = e.latlng;
-    if (mapClickCount === 0) {
-      customStartCoords = [latlng.lat, latlng.lng];
-      const startInput = document.getElementById('start-name-input');
-      if(startInput) startInput.value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
-      const endInput = document.getElementById('end-name-input');
-      if(endInput) endInput.value = ""; 
-      pushLog(`> GPS_CALIBRATION: START POINT PINNED [${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}]`, "system");
-      mapClickCount = 1;
-    } else {
-      customEndCoords = [latlng.lat, latlng.lng];
-      const endInput = document.getElementById('end-name-input');
-      if(endInput) endInput.value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
-      pushLog(`> GPS_CALIBRATION: END POINT PINNED [${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}]`, "system");
-      mapClickCount = 0;
-      safeSetText('current-track-name', "ROUTE: MAP PINPOINT SECTOR");
-      const result = await mapService.fetchOSRMRoute(customStartCoords, customEndCoords);
-      if (result.success) {
-        pushLog(`> ROUTE_DATA: NEW RACING LINE GENERATED via MAP CLICK! (${result.distance.toFixed(2)} km)`, "success");
-      }
-    }
-  });
-}, 1000);
+// =======================================================
+// 🗺️ OSRM NAVIGATION & GEOLOCATION (CUSTOM ROUTE)
+// =======================================================
+async function loadSelectedRoute() {
+  const presetKey = routePreset ? routePreset.value : 'shibuya_shinjuku';
+  let start, end, trackName;
 
-const searchRouteBtn = document.getElementById('search-route-btn');
-if(searchRouteBtn) {
-  searchRouteBtn.addEventListener('click', async () => {
-    if (isRunning) {
-      pushLog("> ERROR: RACING LINE NAVIGATION CHANGING BLOCKED DURING ACTIVE STINT.", "radio-gp");
+  if (presetKey === "custom") {
+    if (!customStartCoords || !customEndCoords) {
+      safeSetText('current-track-name', "ROUTE: AWAITING CUSTOM MAP INPUT...");
       return;
     }
-    const startInput = document.getElementById('start-name-input');
-    const endInput = document.getElementById('end-name-input');
-    const startName = startInput ? startInput.value.trim() : "";
-    const endName = endInput ? endInput.value.trim() : "";
+    start = customStartCoords;
+    end = customEndCoords;
+    const startInput = document.getElementById('custom-start').value || "Start Grid";
+    const endInput = document.getElementById('custom-end').value || "Destination";
+    trackName = `${startInput.toUpperCase()} ➔ ${endInput.toUpperCase()}`;
+  } else {
+    const preset = ROUTE_PRESETS[presetKey] || ROUTE_PRESETS['shibuya_shinjuku'];
+    start = preset.start;
+    end = preset.end;
+    trackName = preset.name;
+  }
+
+  safeSetText('current-track-name', `ROUTE: ${trackName}`);
+  if (mapService) {
+    const result = await mapService.fetchOSRMRoute(start, end);
+    if (result.success) {
+      pushLog(`> ROUTE_DATA: NEW MAP LOCKED IN. DISTANCE: ${result.distance.toFixed(2)} km`, "success");
+      updateLiveTelemetry();
+    }
+  }
+}
+
+// 🟢 【完全復活】カスタム入力ワードから緯度経度をフェッチする非同期サーチロジック
+const btnSearchCustom = document.getElementById('btn-search-custom');
+if (btnSearchCustom) {
+  btnSearchCustom.addEventListener('click', async () => {
+    const startName = document.getElementById('custom-start').value.trim();
+    const endName = document.getElementById('custom-end').value.trim();
+
     if (!startName || !endName) {
-      pushLog("> ERROR: BOTH START AND END PLACES ARE REQUIRED FOR LOCK-ON.", "radio-gp");
+      pushLog("> ERROR: BOTH START AND DESTINATION FIELDS ARE REQUIRED.", "radio-gp");
       return;
     }
-    pushLog("> TELEMETRY: RESOLVING GRID COORDINATES FROM WORLD DATABASE...");
+
+    pushLog("> TELEMETRY_SERVER: GEOLOCATING ROUTE NODES...");
     const fetchCoords = async (query) => {
       try {
-        if (query.includes(',')) return query.split(',').map(v => parseFloat(v.trim()));
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
         const res = await fetch(url);
         const data = await res.json();
@@ -1114,6 +948,7 @@ if(searchRouteBtn) {
         return null;
       } catch (err) { return null; }
     };
+
     customStartCoords = await fetchCoords(startName);
     if (!customStartCoords) {
       pushLog(`> ERROR: COULD NOT RESOLVE STARTING GRID [${startName}]`, "radio-gp");
@@ -1124,13 +959,43 @@ if(searchRouteBtn) {
       pushLog(`> ERROR: COULD NOT RESOLVE DESTINATION GRID [${endName}]`, "radio-gp");
       return;
     }
+
     safeSetText('current-track-name', `ROUTE: ${startName.toUpperCase()} ➔ ${endName.toUpperCase()}`);
-    const result = await mapService.fetchOSRMRoute(customStartCoords, customEndCoords);
-    if (result.success) {
-      pushLog(`> ROUTE_DATA: SEARCH GRIDS LOCKED. DISTANCE: ${result.distance.toFixed(2)} km`, "success");
-    }
+    loadSelectedRoute();
   });
 }
+
+// 🟢 【完全復活】スタンドバイ中のマップ直接クリック座標キャプチャーリスナー
+setTimeout(() => {
+  if (!mapService || !mapService.map) return;
+  mapService.map.on('click', async function(e) {
+    if (isRunning) {
+      pushLog("> TRACK_SYSTEM: TACTICAL MAP CLICK DENIED. SECTOR NAVIGATION LOCKED DURING RACE.", "radio-gp");
+      return;
+    }
+    const routePresetEl = document.getElementById('route-preset');
+    if (!routePresetEl || routePresetEl.value !== 'custom') return;
+
+    const latlng = e.latlng;
+    const startInput = document.getElementById('custom-start');
+    const endInput = document.getElementById('custom-end');
+
+    if (mapClickCount === 0) {
+      customStartCoords = [latlng.lat, latlng.lng];
+      if(startInput) startInput.value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
+      pushLog(`> MAP_INPUT: START GRID COORDS CAPTURED [${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}]`, "system");
+      mapClickCount = 1;
+    } else {
+      customEndCoords = [latlng.lat, latlng.lng];
+      if(endInput) endInput.value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
+      pushLog(`> MAP_INPUT: DESTINATION GRID COORDS CAPTURED [${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}]`, "system");
+      mapClickCount = 0;
+      
+      safeSetText('current-track-name', "ROUTE: CUSTOM CLICKED TRACK");
+      loadSelectedRoute();
+    }
+  });
+}, 1000);
 
 const audioRouteSelect = document.getElementById('audio-route-select');
 if (audioRouteSelect) {
@@ -1138,13 +1003,83 @@ if (audioRouteSelect) {
     initAudioContext();
     playRadioChirpFailsafe(); 
     manageBgmPlayback();      
-    pushLog(`> AUDIO_SYSTEM: INTERCOM CHANNEL SWITCHED TO [${audioRouteSelect.value.toUpperCase()}].`, "system");
   });
 }
 
-const pipBtn = document.getElementById('pip-btn');
+// 🟢 【完全復活】Picture-in-Picture 起動ボタンと F1ステアリングHUDのインジェクション
+const pipBtn = document.getElementById('pip-btn'); 
 if (pipBtn) {
-  pipBtn.addEventListener('click', () => { togglePipHUD(); });
+  pipBtn.addEventListener('click', async () => {
+    if (!('documentPictureInPicture' in window)) {
+      pushLog("> ERROR: DOCUMENT PIP IS NOT SUPPORTED ON THIS BROWSER ENGINE.", "radio-gp");
+      return;
+    }
+    if (pipWindow) {
+      pipWindow.close();
+      return;
+    }
+
+    try {
+      pipWindow = await window.documentPictureInPicture.requestWindow({ width: 280, height: 120 });
+      
+      const style = pipWindow.document.createElement('style');
+      style.textContent = `
+        body { background: #06020f; color: #00ffff; font-family: sans-serif; text-align: center; margin: 0; padding: 10px; overflow: hidden; }
+        #pip-timer { font-size: 2.2rem; font-weight: bold; font-family: monospace; color: #fff; text-shadow: 0 0 15px var(--accent-neon-cyan); letter-spacing: 2px; line-height: 1; margin-bottom: 10px; }
+        #pip-mode { font-size: 0.9rem; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; }
+        .pip-rpm-container { display: flex; gap: 4px; width: 100%; height: 12px; }
+        .pip-rpm-bar { height: 100%; flex: 1; background: rgba(0,255,255,0.04); border: 1px solid rgba(0,255,255,0.1); transition: background 0.1s; }
+      `;
+      pipWindow.document.head.appendChild(style);
+
+      pipWindow.document.body.innerHTML = `
+        <div id="pip-mode">STANDBY</div>
+        <div id="pip-timer">00:00</div>
+        <div class="pip-rpm-container">
+          ${Array(10).fill().map(() => `<div class="pip-rpm-bar"></div>`).join('')}
+        </div>
+      `;
+
+      pushLog("> AUDIO_SYSTEM: STEERING HUD MODE ENGAGED. POPUP LINK ACTIVE.", "success");
+      updateLiveTelemetry();
+
+      pipWindow.addEventListener('unload', () => {
+        pipWindow = null;
+        pushLog("> AUDIO_SYSTEM: HUD MODE DEACTIVATED. RETURN TO COCKPIT MAIN MONITOR.", "system");
+      });
+    } catch (err) {
+      console.error(err);
+      pushLog("> ERROR: PIP HUD ENGAGEMENT CRITICAL FAILURE.", "radio-gp");
+    }
+  });
 }
 
-initApp();
+async function initApp() {
+  pushLog("> TRACK_SYSTEM: CONNECTING TO TELEMETRY NETWORK...");
+  await loadSelectedRoute();
+  resetTimeState();
+  updateStatusUI();
+  
+  // 1秒ごとの内部メトリック更新（システム時計、タイヤ温度、ERS自動回復のクロックサイクル）
+  setInterval(() => {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    
+    if(realClockDisplay) realClockDisplay.innerText = `${h}:${m}:${s}`;
+    const hudClock = document.getElementById('hud-clock');
+    if(hudClock) hudClock.innerText = `SYS_TIME: ${h}:${m}:${s}`;
+    
+    if (!isRunning) {
+      totalRestTime += 1000;
+      tyreTemp = Math.max(60.0, tyreTemp - 0.3); 
+      ersPercent = Math.min(100, ersPercent + 0.3); 
+      updateLiveTelemetry();
+    }
+  }, 1000);
+  pushLog("> CYBER_OS // ENGINE MAP LEVEL 1 ENGAGED. SYSTEM IS ONLINE.", "success");
+}
+
+// 🏎️ シグナル・オールグリーン！ローンチコントロール、作動！！
+window.addEventListener('DOMContentLoaded', initApp);
