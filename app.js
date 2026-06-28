@@ -48,7 +48,6 @@ const VIDEO_PLAYLIST = [
   "video/focus4.mp4",
   "video/focus5.mp4",
   "video/focus6.mp4",
-  "video/focus7.mp4",
 ];
 let currentVideoIdx = 0;
 
@@ -62,7 +61,6 @@ const WORK_AUDIO_PLAYLIST = [
   "music/work6.m4a",
   "music/work7.m4a",
   "music/work8.m4a",
-  "music/work9.m4a"
 ];
 let currentWorkAudioIdx = 0;
 
